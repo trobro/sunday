@@ -17,7 +17,7 @@ function doAction(creep) {
     myCrp.action(creep);
 }
 
-createCrp('harvester', 3, [Game.WORK, Game.CARRY, Game.CARRY, Game.MOVE], function(creep) {
+createCrp('harvester', 3, [Game.WORK, Game.WORK, Game.CARRY, Game.CARRY, Game.MOVE], function(creep) {
     if(creep.energy < creep.energyCapacity) {
         var target = creep.pos.findNearest(Game.SOURCES);
         creep.moveTo(target);
@@ -25,7 +25,7 @@ createCrp('harvester', 3, [Game.WORK, Game.CARRY, Game.CARRY, Game.MOVE], functi
     } else {
         var target = creep.pos.findNearest(Game.MY_SPAWNS);
         creep.moveTo(target);
-        creep.transferEnergy(target)
+        creep.transferEnergy(target);
     }
 });
 
