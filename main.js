@@ -19,22 +19,22 @@ function doAction(creep) {
 
 createCrp('harvester', 3, [Game.WORK, Game.CARRY, Game.MOVE], function(creep) {
     if(creep.energy < creep.energyCapacity) {
-        var sources = creep.room.find(Game.SOURCES);
-        creep.moveTo(sources[0]);
-        creep.harvest(sources[0]);
-    }
-    else {
-        creep.moveTo(Game.spawns.Spawn1);
-        creep.transferEnergy(Game.spawns.Spawn1)
+        var target = creep.pos.findNearest(Game.SOURCES);
+        creep.moveTo(target);
+        creep.harvest(target);
+    } else {
+        var target = creep.pos.findNearest(Game.MY_SPAWNS);
+        creep.moveTo(target);
+        creep.transferEnergy(target)
     }
 });
 
-createCrp('builder', 1, [Game.WORK, Game.WORK, Game.WORK, Game.CARRY, Game.MOVE], function(creep) {
+createCrp('builder', 0, [Game.WORK, Game.WORK, Game.WORK, Game.CARRY, Game.MOVE], function(creep) {
     if(creep.energy == 0) {
-        creep.moveTo(Game.spawns.Spawn1);
-        Game.spawns.Spawn1.transferEnergy(creep);
-    }
-    else {
+        var target = creep.pos.findNearest(Game.MY_SPAWNS);
+        creep.moveTo(target);
+        target.transferEnergy(creep);
+    } else {
         var targets = creep.room.find(Game.CONSTRUCTION_SITES);
         if(targets.length) {
             creep.moveTo(targets[0]);
@@ -43,7 +43,7 @@ createCrp('builder', 1, [Game.WORK, Game.WORK, Game.WORK, Game.CARRY, Game.MOVE]
     }
 });
 
-createCrp('guard', 100, [Game.ATTACK, Game.CARRY, Game.MOVE], function(creep) {
+createCrp('guard', 100, [Game.ATTACK, Game.ATTACK, Game.ATTACK, Game.MOVE], function(creep) {
     var targets = creep.room.find(Game.HOSTILE_CREEPS);
     if(targets.length) {
         creep.moveTo(targets[0]);
@@ -64,5 +64,6 @@ for (var typeName in crp) {
                 mySpawn.createCreep(myCrp.body, null, {role: myCrp.typeName});
             }
         }
+        break;
     }
 }
