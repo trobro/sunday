@@ -50,12 +50,14 @@ createCrp('guard', 100, [Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.MOVE, Game.RAN
         hostileTarget = creep.pos.findNearest(Game.HOSTILE_CREEPS);
     }
     if (hostileTarget) {
-        if (!creep.pos.inRangeTo(hostileTarget, 5)) {
+        if (!creep.pos.inRangeTo(hostileTarget, 3)) {
             creep.moveTo(hostileTarget);
         }
         if (creep.rangedAttack(hostileTarget) < 0) {
             creep.rangedAttack(creep.pos.findNearest(Game.HOSTILE_CREEPS));
         }
+    } else if (creep.pos.findInRange(Game.MY_SPAWNS, 4).length > 0) {
+        creep.moveTo(27, 27);
     } else if (!leader) {
         leader = creep;
     } else {
