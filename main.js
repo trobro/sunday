@@ -17,7 +17,7 @@ function doAction(creep) {
     myCrp.action(creep);
 }
 
-createCrp('harvester', 3, [Game.WORK, Game.CARRY, Game.MOVE], function(creep) {
+createCrp('harvester', 3, [Game.WORK, Game.CARRY, Game.CARRY, Game.MOVE], function(creep) {
     if(creep.energy < creep.energyCapacity) {
         var target = creep.pos.findNearest(Game.SOURCES);
         creep.moveTo(target);
@@ -43,7 +43,7 @@ createCrp('builder', 0, [Game.WORK, Game.WORK, Game.WORK, Game.CARRY, Game.MOVE]
     }
 });
 
-createCrp('guard', 100, [Game.ATTACK, Game.ATTACK, Game.ATTACK, Game.MOVE], function(creep) {
+createCrp('guard', 100, [Game.MOVE, Game.MOVE, Game.ATTACK, Game.ATTACK], function(creep) {
     var targets = creep.room.find(Game.HOSTILE_CREEPS);
     if(targets.length) {
         creep.moveTo(targets[0]);
