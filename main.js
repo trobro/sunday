@@ -45,14 +45,17 @@ createCrp('builder', 0, [Game.WORK, Game.WORK, Game.WORK, Game.CARRY, Game.MOVE]
 
 var hostileTarget = false;
 var leader = false;
-createCrp('guard', 100, [Game.MOVE, Game.MOVE, Game.MOVE, Game.RANGED_ATTACK, Game.RANGED_ATTACK], function(creep) {
+createCrp('guard', 100, [Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.MOVE, Game.RANGED_ATTACK], function(creep) {
     if (!hostileTarget) {
         hostileTarget = creep.pos.findNearest(Game.HOSTILE_CREEPS);
     }
     if (hostileTarget) {
-        creep.moveTo(hostileTarget);
-        creep.rangedAttack(hostileTarget);
-        creep.attack(hostileTarget);
+        if (!creep.pos.inRangeTo(hostileTarget, 5)) {
+            creep.moveTo(hostileTarget);
+        }
+        if (creep.rangedAttack(hostileTarget) < 0) {
+            creep.rangedAttack(creep.pos.findNearest(Game.HOSTILE_CREEPS));
+        }
     } else if (!leader) {
         leader = creep;
     } else {
