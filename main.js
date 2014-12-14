@@ -45,7 +45,7 @@ createCrp('builder', 0, [Game.WORK, Game.WORK, Game.WORK, Game.CARRY, Game.MOVE]
 
 var hostileTarget = false;
 var leader = false;
-createCrp('guard', 100, [Game.MOVE, Game.MOVE, Game.ATTACK, Game.RANGED_ATTACK], function(creep) {
+createCrp('guard', 100, [Game.MOVE, Game.MOVE, Game.MOVE, Game.RANGED_ATTACK, Game.RANGED_ATTACK], function(creep) {
     if (!hostileTarget) {
         hostileTarget = creep.pos.findNearest(Game.HOSTILE_CREEPS);
     }
