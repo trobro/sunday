@@ -17,7 +17,7 @@ function doAction(creep) {
     myCrp.action(creep);
 }
 
-createCrp('harvester', 3, [Game.WORK, Game.WORK, Game.CARRY, Game.CARRY, Game.MOVE], function(creep) {
+createCrp('harvester', 5, [Game.WORK, Game.WORK, Game.CARRY, Game.CARRY, Game.MOVE], function(creep) {
     if(creep.energy < creep.energyCapacity) {
         var target = creep.pos.findNearest(Game.SOURCES);
         creep.moveTo(target);
@@ -43,16 +43,27 @@ createCrp('builder', 0, [Game.WORK, Game.WORK, Game.WORK, Game.CARRY, Game.MOVE]
     }
 });
 
-createCrp('guard', 100, [Game.MOVE, Game.MOVE, Game.ATTACK, Game.ATTACK], function(creep) {
-    var targets = creep.room.find(Game.HOSTILE_CREEPS);
-    if(targets.length) {
-        creep.moveTo(targets[0]);
-        creep.attack(targets[0]);
+var hostileTarget = false;
+var leader = false;
+createCrp('guard', 100, [Game.MOVE, Game.MOVE, Game.ATTACK, Game.RANGED_ATTACK], function(creep) {
+    if (!hostileTarget) {
+        hostileTarget = creep.pos.findNearest(Game.HOSTILE_CREEPS);
+    }
+    if (hostileTarget) {
+        creep.moveTo(hostileTarget);
+        creep.rangedAttack(hostileTarget);
+        creep.attack(hostileTarget);
+    } else if (!leader) {
+        leader = creep;
+    } else {
+        if (creep.moveTo(leader) < 0) {
+            creep.moveTo(leader, {ignoreCreeps: true});
+        }
     }
 });
 
-for(var name in Game.creeps) {
-    doAction(Game.creeps[name]);
+for(var i in Game.creeps) {
+    doAction(Game.creeps[i]);
 }
 
 for (var typeName in crp) {
