@@ -49,19 +49,37 @@ createCrp('healer', 0, [Game.MOVE, Game.MOVE, Game.HEAL, Game.HEAL], function(cr
       creep.moveTo(creep.pos.x - (enemy.pos.x - creep.pos.x), creep.pos.y - (enemy.pos.y - creep.pos.y));
       return;
     }
+    var minDistance = 100000;
+    var chosenIndex = '';
+    var maxDamage = 0;
     for(var i in Game.creeps) {
       var target = Game.creeps[i];
-      if(target && target.hits < target.hitsMax) {
-        creep.moveTo(target);
-        if (creep.heal(target) < 0) {
-          creep.rangedHeal(target);
+      if (target && target.hits < target.hitsMax) {
+        var damage = target.hitsMax - target.hits;
+        var distance = Math.max(Math.abs(target.pos.x - creep.pos.x),
+          Math.abs(target.pos.y - creep.pos.y));
+        if (distance < 4) {
+          if (damage > maxDamage) {
+            chosenIndex = i;
+            maxDamage = damage;
+          }
+          minDistance = Math.min(distance, minDistance);
+        } else if (distance < minDistance) {
+          minDistance = distance;
+          chosenIndex = i;
         }
-        return;
       }
     }
-    if (creep.pos.y < 13) {
-      creep.moveTo(35, 12);
+    if (chosenIndex != '') {
+      var target = Game.creeps[chosenIndex];
+      if (creep.heal(target) < 0) {
+        if (creep.rangedHeal(target) < 0) {
+          creep.moveTo(target);
+        }
+      }
+      return;
     }
+    creep.moveTo(35, 12);
 });
 
 createCrp('guard', 100, [Game.MOVE, Game.RANGED_ATTACK, Game.RANGED_ATTACK, Game.RANGED_ATTACK, Game.RANGED_ATTACK], function(creep) {
@@ -80,7 +98,7 @@ createCrp('guard', 100, [Game.MOVE, Game.RANGED_ATTACK, Game.RANGED_ATTACK, Game
       creep.rangedAttack(targets[chosenIndex]);
     }
     var spawn = creep.pos.findClosest(Game.MY_SPAWNS);
-    if (spawn && creep.pos.x - spawn.pos.x < 10) {
+    if (spawn && creep.pos.x - spawn.pos.x < (Object.keys(Game.creeps).length > 18 ? 13 : 10)) {
       if (spawn && spawn.pos.y - creep.pos.y < 3) {
         if (creep.room.lookAt(creep.pos.x + 1, creep.pos.y - 1).length < 2) {
           creep.move(Game.TOP_RIGHT);
