@@ -28,10 +28,15 @@ function doAction(creep) {
     myCrp.action(creep);
 }
 
-createCrp('harvester', 1, [Game.WORK, Game.WORK, Game.WORK, Game.MOVE], function(creep) {
-    var target = creep.pos.findClosest(Game.SOURCES);
-    if (creep.harvest(target) < 0) {
-      creep.moveTo(target);
+createCrp('harvester', 2, [Game.WORK, Game.WORK, Game.WORK, Game.CARRY, Game.MOVE], function(creep) {
+    var sources = getRoom().find(Game.SOURCES);
+    for (var a = 0; a < sources.length; a++) {
+      if (sources[a].id == creep.memory.sourceKey) {
+        if (creep.harvest(sources[a]) < 0) {
+          creep.moveTo(sources[a]);
+        }
+        break;
+      }
     }
 });
 
@@ -44,59 +49,62 @@ function avoidEnemies(creep) {
   return false;
 }
 
-var drops = getRoom().find(Game.DROPPED_ENERGY);
+var drops = [];
+for (key in Game.creeps) {
+  if (Game.creeps[key].energy > 0 && Game.creeps[key].memory.role == 'harvester') {
+    drops.push(Game.creeps[key]);
+  }
+}
+var drops2 = getRoom().find(Game.DROPPED_ENERGY);
+for (var a = 0; a < drops2.length; a++) {
+  for (var b = 0; b < drops.length; b++) {
+    if (drops2[a].pos.equalsTo(drops[b].pos)) {
+      drops.push(drops2[a]);
+      break;
+    }
+  }
+}
 for (var a = 0; a < drops.length; a++) {
-  drops[a].energyRemaining = drops[a].energy;
+  drops[a].carries = [];
 }
 
 createCrp('carry', 2, [Game.CARRY, Game.CARRY, Game.MOVE, Game.MOVE], function(creep) {
-  if (avoidEnemies(creep)) {
-    return;
-  }
+  // if (avoidEnemies(creep)) {
+    // return;
+  // }
   if (creep.energy < creep.energyCapacity) {
-    var minDistance = 100000;
-    var chosenIndex = -1;
-    var mostEnergyRemaining = -100000;
-    var enIndex = -1;
+    creep.hasTarget = false;
     for (var a = 0; a < drops.length; a++) {
       var distance = calculateDistance(drops[a].pos, creep.pos);
-      if (distance < minDistance && drops[a].energyRemaining > 0) {
-        minDistance = distance;
-        chosenIndex = a;
-      } else if (drops[a].energyRemaining > mostEnergyRemaining) {
-        mostEnergyRemaining = drops[a].energyRemaining;
-        enIndex = a;
+      var insertIndex = 0
+      for (; insertIndex < drops[a].carries.length; insertIndex++) {
+        var carry = drops[a].carries[insertIndex];
+        if (carry.distance > distance ||
+          (carry.distance == distance && carry.energy < creep.energy))
+        {
+          break;
+        }
       }
+      drops[a].carries.splice(insertIndex, 0, {distance: distance, creep: creep});
     }
-    if (chosenIndex < 0) {
-      chosenIndex = enIndex;
+  } else {
+    var target = creep.pos.findClosest(Game.MY_SPAWNS);
+    if (creep.transferEnergy(target) < 0) {
+      creep.moveTo(target);
     }
-    if (chosenIndex >= 0) {
-      var target = drops[chosenIndex];
-      if (creep.pickup(target) == Game.OK) {
-        drops[chosenIndex].energyRemaining -= creep.energyCapacity - creep.energy;
-      } else {
-        creep.moveTo(target);
-      }
-      return;
-    }
-  }
-  var target = creep.pos.findClosest(Game.MY_SPAWNS);
-  if (creep.transferEnergy(target) < 0) {
-    creep.moveTo(target);
   }
 });
 
 createCrp('healer', 0, [Game.MOVE, Game.MOVE, Game.HEAL, Game.HEAL], function(creep) {
-    if (avoidEnemies(creep)) {
-      return;
-    }
+    // if (avoidEnemies(creep)) {
+      // return;
+    // }
     var minDistance = 100000;
     var chosenIndex = '';
     var maxDamage = 0;
     for(var i in Game.creeps) {
       var target = Game.creeps[i];
-      if (target && target.hits < target.hitsMax) {
+      if (target != creep && target.hits < target.hitsMax && target.pos.y > 6) {
         var damage = target.hitsMax - target.hits;
         var distance = calculateDistance(creep.pos, target.pos);
         if (distance < 4) {
@@ -115,7 +123,7 @@ createCrp('healer', 0, [Game.MOVE, Game.MOVE, Game.HEAL, Game.HEAL], function(cr
       var target = Game.creeps[chosenIndex];
       if (creep.heal(target) < 0) {
         if (creep.rangedHeal(target) < 0) {
-          creep.moveTo(target.pos.x, Math.max(target.pos.y, 8));
+          creep.moveTo(target.pos.x, target.pos.y + 3);
         }
       }
       return;
@@ -151,16 +159,16 @@ createCrp('guard', 100, [Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.TO
             heal += body.hits;
           }
         }
-        if (ranged >= maxRanged) {
-          if (ranged > maxRanged) {
-            maxRanged = ranged;
+        if (heal >= maxHeal) {
+          if (heal > maxHeal) {
+            maxHeal = heal;
             chosenIndex = i;
-          } else if (attack >= maxAttack) {
-            if (attack > maxAttack) {
-              maxAttack = attack;
+          } else if (ranged >= maxRanged) {
+            if (ranged > maxRanged) {
+              maxRanged = ranged;
               chosenIndex = i;
-            } else if (heal > maxHeal) {
-              maxHeal = heal;
+            } else if (attack > maxAttack) {
+              maxAttack = attack;
               chosenIndex = i;
             }
           }
@@ -178,7 +186,7 @@ createCrp('guard', 100, [Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.TO
           creep.move(Game.TOP_RIGHT);
         } else if (creep.room.lookAt(creep.pos.x, creep.pos.y - 1).length < 2) {
           creep.move(Game.TOP);
-        } else if (creep.pos.x < 25) {
+        } else {
           creep.move(Game.RIGHT);
         }
       } else if (creep.pos.y == 7) {
@@ -191,11 +199,37 @@ for(var i in Game.creeps) {
     doAction(Game.creeps[i]);
 }
 
-if (crp.guard.count > 1) {
-  crp.harvester.maxCount = 2;
-  crp.carry.maxCount = 4;
+for (var a = 0; a < drops.length; a++) {
+  var transferred = 0;
+  var carryCount = 0;
+  for (var b = 0; b < drops[a].carries.length; b++) {
+    var creep = drops[a].carries[b].creep;
+    if (!creep.hasTarget) {
+      var target = drops[a];
+      if (creep.pickup(target) == Game.OK ||
+        (target.my && target.transferEnergy(creep) == Game.OK))
+      {
+        transferred += creep.energyCapacity - creep.energy;
+      } else {
+        creep.moveTo(target);
+      }
+      carryCount++;
+      if (carryCount > 0 || transferred >= target.energy) {
+        break;
+      }
+    }
+  }
 }
-crp.healer.maxCount = Math.floor(crp['guard'].count / 4);
+
+if (crp.guard.count > 1) {
+  crp.harvester.maxCount = 4;
+  crp.carry.maxCount = 4;
+  crp.healer.maxCount = 1;
+}
+if (crp.guard.count > 4) {
+  crp.harvester.maxCount = 4;
+}
+// crp.healer.maxCount = Math.floor(crp['guard'].count / 4);
 
 for (var typeName in crp) {
     var myCrp = crp[typeName];
@@ -203,7 +237,35 @@ for (var typeName in crp) {
         for(var i in Game.spawns) {
             var mySpawn = Game.spawns[i];
             if (!mySpawn.spawning) {
-                mySpawn.createCreep(myCrp.body, null, {role: myCrp.typeName});
+                var mem = {role: myCrp.typeName};
+                if (myCrp.typeName == 'harvester') {
+                  var assCount = {};
+                  for (key in Game.creeps) {
+                    var creep = Game.creeps[key];
+                    if (creep.memory.role == 'harvester' && creep.ticksToLive > 100) {
+                      if (creep.memory.sourceKey in assCount) {
+                        assCount[creep.memory.sourceKey]++;
+                      } else {
+                        assCount[creep.memory.sourceKey] = 1;
+                      }
+                    }
+                  }
+                  var sources = getRoom().find(Game.SOURCES);
+                  var minDistance = 100000;
+                  var chosenIndex = -1;
+                  for (var sourceIndex = 0; sourceIndex < sources.length; sourceIndex++) {
+                    var distance = calculateDistance(mySpawn.pos, sources[sourceIndex].pos);
+                    if ((!assCount[sources[sourceIndex].id] ||
+                      assCount[sources[sourceIndex].id] < 2) &&
+                      distance < minDistance)
+                    {
+                      minDistance = distance;
+                      chosenIndex = sourceIndex;
+                    }
+                  }
+                  mem.sourceKey = sources[chosenIndex].id;
+                }
+                mySpawn.createCreep(myCrp.body, null, mem);
             }
         }
         break;
