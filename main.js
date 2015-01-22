@@ -78,12 +78,12 @@ createCrp('carry', 2, [Game.CARRY, Game.CARRY, Game.MOVE, Game.MOVE], function(c
       } else {
         creep.moveTo(target);
       }
+      return;
     }
-  } else {
-    var target = creep.pos.findClosest(Game.MY_SPAWNS);
-    if (creep.transferEnergy(target) < 0) {
-      creep.moveTo(target);
-    }
+  }
+  var target = creep.pos.findClosest(Game.MY_SPAWNS);
+  if (creep.transferEnergy(target) < 0) {
+    creep.moveTo(target);
   }
 });
 
@@ -115,7 +115,7 @@ createCrp('healer', 0, [Game.MOVE, Game.MOVE, Game.HEAL, Game.HEAL], function(cr
       var target = Game.creeps[chosenIndex];
       if (creep.heal(target) < 0) {
         if (creep.rangedHeal(target) < 0) {
-          creep.moveTo(target);
+          creep.moveTo(target.pos.x, Math.max(target.pos.y, 8));
         }
       }
       return;
