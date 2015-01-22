@@ -1,5 +1,3 @@
-var harvester = require('harvester');
-
 var crp = {};
 function createCrp(typeName, maxCount, body, action) {
     crp[typeName] = {
@@ -17,21 +15,23 @@ function doAction(creep) {
     myCrp.action(creep);
 }
 
-createCrp('harvester', 5, [Game.WORK, Game.WORK, Game.CARRY, Game.CARRY, Game.MOVE], function(creep) {
+createCrp('harvester', 4, [Game.WORK, Game.WORK, Game.CARRY, Game.CARRY, Game.MOVE], function(creep) {
     if(creep.energy < creep.energyCapacity) {
-        var target = creep.pos.findNearest(Game.SOURCES);
-        creep.moveTo(target);
-        creep.harvest(target);
+        var target = creep.pos.findClosest(Game.SOURCES);
+        if (creep.harvest(target) < 0) {
+          creep.moveTo(target);
+        }
     } else {
-        var target = creep.pos.findNearest(Game.MY_SPAWNS);
-        creep.moveTo(target);
-        creep.transferEnergy(target);
+        var target = creep.pos.findClosest(Game.MY_SPAWNS);
+        if (creep.transferEnergy(target) < 0) {
+          creep.moveTo(target);
+        }
     }
 });
 
 createCrp('builder', 0, [Game.WORK, Game.WORK, Game.WORK, Game.CARRY, Game.MOVE], function(creep) {
     if(creep.energy == 0) {
-        var target = creep.pos.findNearest(Game.MY_SPAWNS);
+        var target = creep.pos.findClosest(Game.MY_SPAWNS);
         creep.moveTo(target);
         target.transferEnergy(creep);
     } else {
@@ -43,33 +43,66 @@ createCrp('builder', 0, [Game.WORK, Game.WORK, Game.WORK, Game.CARRY, Game.MOVE]
     }
 });
 
-var hostileTarget = false;
-var leader = false;
-createCrp('guard', 100, [Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.MOVE, Game.RANGED_ATTACK], function(creep) {
-    if (!hostileTarget) {
-        hostileTarget = creep.pos.findNearest(Game.HOSTILE_CREEPS);
+createCrp('healer', 0, [Game.MOVE, Game.MOVE, Game.HEAL, Game.HEAL], function(creep) {
+    var enemy = creep.pos.findClosest(Game.HOSTILE_CREEPS);
+    if (enemy && creep.pos.inRangeTo(enemy.pos, 4)) {
+      creep.moveTo(creep.pos.x - (enemy.pos.x - creep.pos.x), creep.pos.y - (enemy.pos.y - creep.pos.y));
+      return;
     }
-    if (hostileTarget) {
-        if (!creep.pos.inRangeTo(hostileTarget, 3)) {
-            creep.moveTo(hostileTarget);
+    for(var i in Game.creeps) {
+      var target = Game.creeps[i];
+      if(target && target.hits < target.hitsMax) {
+        creep.moveTo(target);
+        if (creep.heal(target) < 0) {
+          creep.rangedHeal(target);
         }
-        if (creep.rangedAttack(hostileTarget) < 0) {
-            creep.rangedAttack(creep.pos.findNearest(Game.HOSTILE_CREEPS));
-        }
-    } else if (creep.pos.findInRange(Game.MY_SPAWNS, 4).length > 0) {
-        creep.moveTo(27, 27);
-    } else if (!leader) {
-        leader = creep;
+        return;
+      }
+    }
+    if (creep.pos.y < 13) {
+      creep.moveTo(35, 12);
+    }
+});
+
+createCrp('guard', 100, [Game.MOVE, Game.RANGED_ATTACK, Game.RANGED_ATTACK, Game.RANGED_ATTACK, Game.RANGED_ATTACK], function(creep) {
+    if (creep.pos.findInRange(Game.HOSTILE_CREEPS, 1).length > 0) {
+      creep.rangedMassAttack();
     } else {
-        if (creep.moveTo(leader) < 0) {
-            creep.moveTo(leader, {ignoreCreeps: true});
+      var targets = creep.pos.findInRange(Game.HOSTILE_CREEPS, 3);
+      var minHits = 100000;
+      var chosenIndex = 0;
+      for (var i = 0; i < targets.length; i++) {
+        if (targets[i].hits < minHits) {
+          minHits = targets[i].hits;
+          chosenIndex = i;
         }
+      }
+      creep.rangedAttack(targets[chosenIndex]);
+    }
+    var spawn = creep.pos.findClosest(Game.MY_SPAWNS);
+    if (spawn && creep.pos.x - spawn.pos.x < 10) {
+      if (spawn && spawn.pos.y - creep.pos.y < 3) {
+        if (creep.room.lookAt(creep.pos.x + 1, creep.pos.y - 1).length < 2) {
+          creep.move(Game.TOP_RIGHT);
+        } else if (creep.room.lookAt(creep.pos.x, creep.pos.y - 1).length < 2) {
+          creep.move(Game.TOP);
+        } else {
+          creep.move(Game.RIGHT);
+        }
+      } else {
+        creep.move(Game.RIGHT);
+      }
     }
 });
 
 for(var i in Game.creeps) {
     doAction(Game.creeps[i]);
 }
+
+if (crp['guard'].count > 0) {
+  crp['harvester'].maxCount = 10;
+}
+crp['healer'].maxCount = Math.floor(crp['guard'].count / 4);
 
 for (var typeName in crp) {
     var myCrp = crp[typeName];
