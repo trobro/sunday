@@ -22,7 +22,9 @@ function getRoom() {
 
 function doAction(creep) {
     myCrp = crp[creep.memory.role];
-    myCrp.count++;
+    if (creep.ticksToLive > 100) {
+      myCrp.count++;
+    }
     myCrp.action(creep);
 }
 
