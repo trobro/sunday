@@ -79,7 +79,9 @@ createCrp('healer', 0, [Game.MOVE, Game.MOVE, Game.HEAL, Game.HEAL], function(cr
       }
       return;
     }
-    creep.moveTo(35, 12);
+    if (creep.pos.x < 25 || creep.pos.y < 10) {
+      creep.moveTo(35, 20);
+    }
 });
 
 createCrp('guard', 100, [Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.TOUGH,
@@ -90,12 +92,37 @@ createCrp('guard', 100, [Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.TO
       creep.rangedMassAttack();
     } else {
       var targets = creep.pos.findInRange(Game.HOSTILE_CREEPS, 3);
-      var minHits = 100000;
       var chosenIndex = 0;
+      var maxRanged = 0;
+      var maxAttack = 0;
+      var maxHeal = 0;
       for (var i = 0; i < targets.length; i++) {
-        if (targets[i].hits < minHits) {
-          minHits = targets[i].hits;
-          chosenIndex = i;
+        var ranged = 0;
+        var attack = 0;
+        var heal = 0;
+        for (var j = 0; j < targets[i].body.length; j++) {
+          var body = targets[i].body[j];
+          if (body.type == Game.RANGED_ATTACK) {
+            ranged += body.hits;
+          } else if (body.type == Game.ATTACK) {
+            attack += body.hits;
+          } else if (body.type == Game.HEAL) {
+            heal += body.hits;
+          }
+        }
+        if (ranged >= maxRanged) {
+          if (ranged > maxRanged) {
+            maxRanged = ranged;
+            chosenIndex = i;
+          } else if (attack >= maxAttack) {
+            if (attack > maxAttack) {
+              maxAttack = attack;
+              chosenIndex = i;
+            } else if (heal > maxHeal) {
+              maxHeal = heal;
+              chosenIndex = i;
+            }
+          }
         }
       }
       creep.rangedAttack(targets[chosenIndex]);
