@@ -56,12 +56,20 @@ createCrp('carry', 2, [Game.CARRY, Game.CARRY, Game.MOVE, Game.MOVE], function(c
   if (creep.energy < creep.energyCapacity) {
     var minDistance = 100000;
     var chosenIndex = -1;
+    var mostEnergyRemaining = -100000;
+    var enIndex = -1;
     for (var a = 0; a < drops.length; a++) {
       var distance = calculateDistance(drops[a].pos, creep.pos);
       if (distance < minDistance && drops[a].energyRemaining > 0) {
         minDistance = distance;
         chosenIndex = a;
+      } else if (drops[a].energyRemaining > mostEnergyRemaining) {
+        mostEnergyRemaining = drops[a].energyRemaining;
+        enIndex = a;
       }
+    }
+    if (chosenIndex < 0) {
+      chosenIndex = enIndex;
     }
     if (chosenIndex >= 0) {
       var target = drops[chosenIndex];
@@ -121,7 +129,7 @@ createCrp('guard', 100, [Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.TO
   Game.MOVE, Game.RANGED_ATTACK, Game.RANGED_ATTACK, Game.RANGED_ATTACK,
   Game.RANGED_ATTACK], function(creep)
 {
-    if (creep.pos.findInRange(Game.HOSTILE_CREEPS, 0).length > 0) {
+    if (creep.pos.findInRange(Game.HOSTILE_CREEPS, 1).length > 0) {
       creep.rangedMassAttack();
     } else {
       var targets = creep.pos.findInRange(Game.HOSTILE_CREEPS, 3);
@@ -160,23 +168,20 @@ createCrp('guard', 100, [Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.TO
       }
       creep.rangedAttack(targets[chosenIndex]);
     }
-    var spawn = creep.pos.findClosest(Game.MY_SPAWNS);
-    if (spawn && creep.pos.x - spawn.pos.x < (Object.keys(Game.creeps).length > 18 ? 12 : 10)) {
+    if (creep.pos.x < (Object.keys(Game.creeps).length > 18 ? 27 : 25)) {
       if (creep.pos.x == 18 && creep.room.lookAt(19, 7).length > 1 &&
         creep.room.lookAt(creep.pos.x, creep.pos.y - 1).length < 2)
       {
         creep.move(Game.TOP);
-      } else if (spawn && spawn.pos.y - creep.pos.y < 3) {
+      } else if (creep.pos.y > 7) {
         if (creep.room.lookAt(creep.pos.x + 1, creep.pos.y - 1).length < 2) {
           creep.move(Game.TOP_RIGHT);
         } else if (creep.room.lookAt(creep.pos.x, creep.pos.y - 1).length < 2) {
           creep.move(Game.TOP);
-        } else {
+        } else if (creep.pos.x < 25) {
           creep.move(Game.RIGHT);
         }
-      } else if (spawn && (spawn.pos.y - creep.pos.y == 3 ||
-        (spawn.pos.y - creep.pos.y < 3 && creep.pos.x - spawn.pos.x < 9)))
-      {
+      } else if (creep.pos.y == 7) {
         creep.move(Game.RIGHT);
       }
     }
