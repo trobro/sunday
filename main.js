@@ -82,7 +82,10 @@ createCrp('healer', 0, [Game.MOVE, Game.MOVE, Game.HEAL, Game.HEAL], function(cr
     creep.moveTo(35, 12);
 });
 
-createCrp('guard', 100, [Game.MOVE, Game.RANGED_ATTACK, Game.RANGED_ATTACK, Game.RANGED_ATTACK, Game.RANGED_ATTACK], function(creep) {
+createCrp('guard', 100, [Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.TOUGH,
+  Game.MOVE, Game.RANGED_ATTACK, Game.RANGED_ATTACK, Game.RANGED_ATTACK,
+  Game.RANGED_ATTACK], function(creep)
+{
     if (creep.pos.findInRange(Game.HOSTILE_CREEPS, 1).length > 0) {
       creep.rangedMassAttack();
     } else {
