@@ -95,7 +95,7 @@ createCrp('carry', 2, [Game.CARRY, Game.CARRY, Game.MOVE, Game.MOVE], function(c
   }
 });
 
-createCrp('healer', 0, [Game.MOVE, Game.MOVE, Game.HEAL, Game.HEAL], function(creep) {
+createCrp('healer', 0, [Game.MOVE, Game.HEAL, Game.HEAL, Game.HEAL, Game.HEAL], function(creep) {
     // if (avoidEnemies(creep)) {
       // return;
     // }
@@ -128,12 +128,14 @@ createCrp('healer', 0, [Game.MOVE, Game.MOVE, Game.HEAL, Game.HEAL], function(cr
       }
       return;
     }
-    if (creep.pos.x < 25 || creep.pos.y < 10) {
+    if (creep.pos.x < 20 || creep.pos.y < 10) {
       creep.moveTo(35, 20);
     }
 });
 
 createCrp('guard', 100, [Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.TOUGH,
+  Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.TOUGH,
+  Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.TOUGH,
   Game.MOVE, Game.RANGED_ATTACK, Game.RANGED_ATTACK, Game.RANGED_ATTACK,
   Game.RANGED_ATTACK], function(creep)
 {
@@ -228,6 +230,15 @@ if (crp.guard.count > 1) {
 }
 if (crp.guard.count > 4) {
   crp.harvester.maxCount = 4;
+}
+if (crp.guard.count > 20) {
+  crp.healer.maxCount = 4;
+}
+if (crp.guard.count > 25) {
+  crp.healer.maxCount = 8;
+}
+if (crp.guard.count > 30) {
+  crp.healer.maxCount = 12;
 }
 // crp.healer.maxCount = Math.floor(crp['guard'].count / 4);
 
