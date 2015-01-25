@@ -101,8 +101,6 @@ function addToSourceArea(pos, energy, isCarry) {
 function shouldAddCarry(pos) {
   var sourceAreaIndex = toIndex(pos);
   var distanceRate = calculateDistance(pos, spawn.pos) / 5 >> 0;
-  console.log('should: ' + (sourceAreas[sourceAreaIndex].energy > -100 * distanceRate ||
-    sourceAreas[sourceAreaIndex].carries < distanceRate));
   return (sourceAreas[sourceAreaIndex].energy > -100 * (distanceRate - 1) ||
     sourceAreas[sourceAreaIndex].carries < distanceRate);
 }
@@ -204,9 +202,6 @@ if (enemies.length <= healLimit || enemies.length <= enLimit) {
     var freeSpace = creep.energyCapacity - creep.energy
     if (chosenKey !== '' && (minDistance < 4 || stayPut == false)) {
       creep.memory.targetPos = posFromKey(chosenKey);
-      if (creep.name == 'Sebastian') {
-        console.log(creep.name + ' new target: ' + creep.memory.targetPos.x);
-      }
       drops[chosenKey] -= freeSpace;
       addToSourceArea(creep.memory.targetPos, -freeSpace, true);
     } else if (stayPut) {
