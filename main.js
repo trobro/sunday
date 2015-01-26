@@ -2,7 +2,7 @@ var enLimit = 60;
 var healLimit = 100;
 var lifeLimit = 30;
 var lifeLongLimit = 300;
-var grX = 20;
+var grX = 21;
 var grY = 8;
 var crp = {};
 function createCrp(typeName, maxCount, body, action) {
@@ -103,6 +103,8 @@ for (var a = 0; a < 3; a++) {
   sourceAreas.push({'carries': 0, 'energy': 0});
 }
 var guardRows = [];
+var hasLeftBuilder = false;
+var hasLeftBuilderCarry = false;
 
 function toIndex(pos) {
   return pos.x / 18 >> 0;
@@ -144,15 +146,14 @@ function posFromKey(key) {
 for (var i in Game.creeps) {
   var creep = Game.creeps[i];
   if (enemies.length <= healLimit && creep.hits < creep.hitsMax) {
-    var chosenIndex = 0;
     var damage = creep.hitsMax - creep.hits;
     if (creep.memory.role != 'guard') {
       damage -= 4000;
     }
     creep.damage = damage;
-    for (var a = 0; a < healTargets.length; a++) {
-      if (damage > healTargets[a].damage) {
-        chosenIndex = a;
+    var chosenIndex = 0;
+    for (; chosenIndex < healTargets.length; chosenIndex++) {
+      if (damage > healTargets[chosenIndex].damage) {
         break;
       }
     }
@@ -195,13 +196,21 @@ for (var i in Game.creeps) {
       } else if (spaceFree > 0) {
         addToDrops(creep.memory.targetPos, -spaceFree, true);
       }
+    } else if (creep.memory.role == 'builder') {
+      if (creep.ticksToLive > lifeLongLimit && creep.memory.workCenter.x < 27) {
+        hasLeftBuilder = true;
+      }
+    } else if (creep.memory.role == 'builderCarry') {
+      if (creep.ticksToLive > lifeLongLimit && creep.memory.workCenter.x < 27) {
+        hasLeftBuilderCarry = true;
+      }
     }
   }
 }
 
 var drops2 = getRoom().find(Game.DROPPED_ENERGY);
 for (var a = 0; a < drops2.length; a++) {
-  if (enemies.length == 0 || !(drops2[a].pos.x > 16 &&
+  if ((false && enemies.length == 0) || !(drops2[a].pos.x > 16 &&
     drops2[a].pos.x < 30 && drops2[a].pos.y < 9))
   {
     addToDrops(drops2[a].pos, drops2[a].energy, false);
@@ -246,9 +255,9 @@ createCrp('harvester', 2, [Game.WORK, Game.WORK, Game.WORK, Game.CARRY, Game.MOV
   }
   if (creep.harvest(sourceByKey[creep.memory.sourceKey]) < 0) {
     creep.moveTo(sourceByKey[creep.memory.sourceKey]);
-  } else if (creep.pos.y == 36) {
+  } else if (creep.pos.y == 36 || (creep.pos.x == 47 && creep.pos.y == 37)) {
     creep.move(Game.BOTTOM);
-  } else if (creep.pos.x == 2) {
+  } else if (creep.pos.x == 2 || creep.pos.x == 3) {
     creep.move(Game.RIGHT);
   } else if (creep.pos.x == 47) {
     creep.move(Game.LEFT);
@@ -348,13 +357,16 @@ createCrp('builderCarry', 0, [Game.CARRY, Game.CARRY, Game.CARRY, Game.MOVE, Gam
       creep.transferEnergy(obj);
       delete creep.memory.targetObj;
     } else {
-      creep.moveTo(creep.memory.targetObj);
+      if (creep.moveTo(creep.memory.targetObj) != Game.OK) {
+        delete creep.memory.targetObj;
+      }
     }
   } else if ('sourceObj' in creep.memory) {
-    if (calculateDistance(creep.pos, creep.memory.sourceObj) < 2) {
+    if (calculateDistance(creep.pos, creep.memory.sourceObj) < 2 ||
+      creep.moveTo(creep.memory.sourceObj.x, creep.memory.sourceObj.y +
+      1) != Game.OK)
+    {
       delete creep.memory.sourceObj;
-    } else {
-      creep.moveTo(creep.memory.sourceObj.x, creep.memory.sourceObj.y + 1);
     }
   } else if (creep.energy) {
     var exts = workCenter.findInRange(Game.MY_STRUCTURES, 10);
@@ -378,7 +390,9 @@ createCrp('builderCarry', 0, [Game.CARRY, Game.CARRY, Game.CARRY, Game.MOVE, Gam
   } else {
     var localCreeps = workCenter.findInRange(Game.MY_CREEPS, 10);
     for (var a = 0; a < localCreeps.length; a++) {
-      if (localCreeps[a].memory.role == 'harvester') {
+      if (localCreeps[a].memory.role == 'harvester' &&
+        localCreeps[a].energy)
+      {
         creep.memory.sourceObj = localCreeps[a].pos;
         break;
       }
@@ -396,21 +410,25 @@ createCrp('healer', 0, [Game.MOVE, Game.HEAL, Game.HEAL, Game.HEAL, Game.HEAL], 
   var chosenIndex = -1;
   var minDistance = 100000;
   for (var a = 0; a < healTargets.length; a++) {
-    distance = calculateDistance(creep.pos, healTargets[a].pos);
-    if (distance < minDistance) {
-      minDistance = distance;
-      chosenIndex = a;
-      if (distance < 4) {
-        break;
+    if (healTargets[a] != creep) {
+      distance = calculateDistance(creep.pos, healTargets[a].pos);
+      if (distance < minDistance) {
+        minDistance = distance;
+        chosenIndex = a;
+        if (distance < 4) {
+          break;
+        }
       }
     }
   }
   if (chosenIndex > -1) {
     var target = healTargets[chosenIndex];
     if (creep.heal(target) < 0) {
-      if (creep.rangedHeal(target) < 0) {
-        creep.moveTo(target.pos.x, grY + 3);
-      }
+      creep.rangedHeal(target);
+    }
+    var index = (healTargets[0] == creep ? chosenIndex : 0);
+    if (calculateDistance(creep.pos, healTargets[index].pos) > 2) {
+      creep.moveTo(healTargets[index].pos.x, grY + 2);
     }
     return;
   }
@@ -499,7 +517,7 @@ if (crp.guard.count > 2) {
   crp.harvester.maxCount = 10;
 }
 if (crp.guard.count > 3) {
-  if (getRoom().find(Game.CONSTRUCTION_SITES).length) {
+  if (getRoom().find(Game.CONSTRUCTION_SITES).length > 2) {
     crp.builder.maxCount = 2;
   }
   crp.builderCarry.maxCount = 2;
@@ -516,11 +534,9 @@ if (crp.guard.count > 40) {
 var exts = getRoom().find(Game.MY_STRUCTURES);
 for (var a = 0; a < exts.length; a++) {
   if (exts[a].structureType == Game.STRUCTURE_EXTENSION) {
-  // &&
-    // exts[a].energy == exts[a].energyCapacity)
-  // {
     crp.guard.body.splice(0, 1);
     crp.guard.body.push(Game.RANGED_ATTACK);
+    crp.healer.body.push(crp.healer.body.length > 8 ? Game.MOVE : Game.HEAL);
   }
 }
 
@@ -547,9 +563,11 @@ for (var typeName in crp) {
             }
           }
           mem.sourceKey = sources[chosenIndex >= 0 ? chosenIndex : chosenBottom].id;
-        } else if (myCrp.typeName == 'builder' || myCrp.typeName == 'builderCarry') {
-          mem.workCenter = {'x': (myCrp.count ? 3 : 46), 'y': 37};
+        } else if (myCrp.typeName == 'builder') {
+          mem.workCenter = {'x': (hasLeftBuilder ? 46 : 3), 'y': 37};
           mem.targetConstruction = null;
+        } else if (myCrp.typeName == 'builderCarry') {
+          mem.workCenter = {'x': (hasLeftBuilderCarry ? 46 : 3), 'y': 37};
         }
         mySpawn.createCreep(myCrp.body, null, mem);
       }
