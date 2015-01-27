@@ -116,7 +116,7 @@ var sourceAreas = [];
 for (var a = 0; a < 3; a++) {
   sourceAreas.push({'carries': 0, 'energy': 0});
 }
-var guardRows = [];
+var grid = [];
 var hasLeftBuilder = false;
 var hasLeftBuilderCarry = false;
 
@@ -184,21 +184,21 @@ for (var i in Game.creeps) {
   {
     var x = creep.pos.x - grX;
     var y = creep.pos.y - grY;
-    while (guardRows.length - 2 < y) {
-      guardRows.push([]);
+    while (grid.length - 2 < y) {
+      grid.push([]);
     }
     var maxLength = x + 2;
-    for (var b = 0; b < guardRows.length; b++) {
-      if (guardRows[b].length > maxLength) {
-        maxLength = guardRows[b].length;
+    for (var b = 0; b < grid.length; b++) {
+      if (grid[b].length > maxLength) {
+        maxLength = grid[b].length;
       }
     }
-    for (var b = 0; b < guardRows.length; b++) {
-      for (var a = guardRows[b].length; a < maxLength; a++) {
-        guardRows[b].push(null);
+    for (var b = 0; b < grid.length; b++) {
+      for (var a = grid[b].length; a < maxLength; a++) {
+        grid[b].push(null);
       }
     }
-    guardRows[y][x] = creep;
+    grid[y][x] = creep;
   } else if (enemies.length <= enLimit) {
     if (creep.memory.role == 'harvester') {
       if (creep.ticksToLive > (creep.pos.y > 27 ? lifeLongLimit : lifeLimit)) {
@@ -540,32 +540,32 @@ for (var i in Game.creeps) {
 }
 
 var thestring = '';
-for (var b = 0; b < guardRows.length - 1; b++) {
-  for (var a = 1; a < guardRows[b].length - 1; a++) {
-      thestring += (!guardRows[b][a] ? '0' : '1');
-    if (!guardRows[b][a]) {
-      if (guardRows[b+1][a+1] && !guardRows[b+1][a+1].fatigue &&
-        (!guardRows[b][a+1] || !guardRows[b+1][a]) &&
-        (b > 1 || guardRows[b+1][a+1].memory.role == 'guard'))
+for (var b = 0; b < grid.length - 1; b++) {
+  for (var a = 1; a < grid[b].length - 1; a++) {
+      thestring += (!grid[b][a] ? '0' : '1');
+    if (!grid[b][a]) {
+      if (grid[b+1][a+1] && !grid[b+1][a+1].fatigue &&
+        (!grid[b][a+1] || !grid[b+1][a]) &&
+        (b > 1 || grid[b+1][a+1].memory.role == 'guard'))
       {
-          // console.log('move TL ' + guardRows[b+1][a+1].name);
-        guardRows[b+1][a+1].move(Game.TOP_LEFT);
-        guardRows[b][a] = guardRows[b+1][a+1];
-        guardRows[b+1][a+1] = null;
-      } else if (guardRows[b+1][a] && !guardRows[b+1][a].fatigue &&
-         (b > 1 || guardRows[b+1][a].memory.role == 'guard'))
+          // console.log('move TL ' + grid[b+1][a+1].name);
+        grid[b+1][a+1].move(Game.TOP_LEFT);
+        grid[b][a] = grid[b+1][a+1];
+        grid[b+1][a+1] = null;
+      } else if (grid[b+1][a] && !grid[b+1][a].fatigue &&
+         (b > 1 || grid[b+1][a].memory.role == 'guard'))
       {
-          // console.log('move TOP ' + guardRows[b+1][a].name);
-        guardRows[b+1][a].move(Game.TOP);
-        guardRows[b][a] = guardRows[b+1][a];
-        guardRows[b+1][a] = null;
-      } else if (a >= b && guardRows[b][a+1] && !guardRows[b][a+1].fatigue &&
-        (b < 2 || guardRows[b][a+1].memory.role == 'healer'))
+          // console.log('move TOP ' + grid[b+1][a].name);
+        grid[b+1][a].move(Game.TOP);
+        grid[b][a] = grid[b+1][a];
+        grid[b+1][a] = null;
+      } else if (a >= b && grid[b][a+1] && !grid[b][a+1].fatigue &&
+        (b < 2 || grid[b][a+1].memory.role == 'healer'))
       {
-          // console.log('move LEFT ' + guardRows[b][a+1].name);
-        guardRows[b][a+1].move(Game.LEFT);
-        guardRows[b][a] = guardRows[b][a+1];
-        guardRows[b][a+1] = null;
+          // console.log('move LEFT ' + grid[b][a+1].name);
+        grid[b][a+1].move(Game.LEFT);
+        grid[b][a] = grid[b][a+1];
+        grid[b][a+1] = null;
       }
     }
   }
