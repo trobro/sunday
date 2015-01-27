@@ -118,7 +118,7 @@ function toIndex(pos) {
 }
 
 function addToSourceArea(pos, energy, isCarry) {
-  if (room.getPositionAt(pos.x, pos.y).findInRange(Game.SOURCE, 1).length) {
+  if (room.getPositionAt(pos.x, pos.y).findInRange(Game.SOURCES, 1).length) {
     var sourceAreaIndex = toIndex(pos);
     sourceAreas[sourceAreaIndex].energy += energy;
     if (isCarry) {
@@ -128,7 +128,7 @@ function addToSourceArea(pos, energy, isCarry) {
 }
 
 function shouldAddCarry(pos) {
-  if (pos.findInRange(Game.SOURCE, 1).length) {
+  if (pos.findInRange(Game.SOURCES, 1).length) {
     var sourceAreaIndex = toIndex(pos);
     var distanceRate = (calculateDistance(pos, spawn.pos) / 5 >> 0) - 1;
     return (sourceAreas[sourceAreaIndex].energy > -100 * distanceRate ||
@@ -256,6 +256,7 @@ for (var a = 0; a < freeCarries.length; a++) {
       creep.memory.targetPos = spawn.pos;
     }
   } else if (chosenKey !== '' && (minDistance < 4 || stayPut == false)) {
+    creep.say(chosenKey);
     creep.memory.targetPos = posFromKey(chosenKey);
     drops[chosenKey] -= freeSpace;
     addToSourceArea(creep.memory.targetPos, -freeSpace, true);
@@ -367,7 +368,6 @@ createCrp('carry', 2, [Game.CARRY, Game.CARRY, Game.CARRY, Game.MOVE, Game.MOVE]
       if (spawn.pos.equalsTo(creep.memory.targetPos) &&
         creep.transferEnergy(spawn) != Game.OK)
       {
-    console.log('yes');
         creep.move(spawn.pos.getDirectionTo(creep));
       }
       delete creep.memory.targetPos;
@@ -375,6 +375,7 @@ createCrp('carry', 2, [Game.CARRY, Game.CARRY, Game.CARRY, Game.MOVE, Game.MOVE]
       creep.moveTo(creep.memory.targetPos);
     }
   } else if (calculateDistance(spawn.pos, creep.pos) < 4) {
+    creep.say('Nothing to do!');
     creep.moveTo(spawn.pos.x, spawn.pos.y + 4);
   }
   var localDrops = creep.pos.findInRange(Game.DROPPED_ENERGY, 1);
