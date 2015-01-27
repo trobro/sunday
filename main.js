@@ -45,8 +45,10 @@ var room = getRoom();
 var spawn = room.find(Game.MY_SPAWNS)[0];
 room.createConstructionSite(3, 41, Game.STRUCTURE_EXTENSION);
 room.createConstructionSite(4, 41, Game.STRUCTURE_EXTENSION);
+room.createConstructionSite(5, 41, Game.STRUCTURE_EXTENSION);
 room.createConstructionSite(46, 42, Game.STRUCTURE_EXTENSION);
 room.createConstructionSite(45, 42, Game.STRUCTURE_EXTENSION);
+room.createConstructionSite(44, 42, Game.STRUCTURE_EXTENSION);
 // room.createConstructionSite(spawn.pos.x, spawn.pos.y + 2, Game.STRUCTURE_EXTENSION);
 // room.createConstructionSite(spawn.pos.x + 1, spawn.pos.y + 2, Game.STRUCTURE_EXTENSION);
 // room.createConstructionSite(spawn.pos.x + 2, spawn.pos.y + 2, Game.STRUCTURE_EXTENSION);
@@ -75,20 +77,25 @@ for (var a = 0; a < tmpEnemies.length; a++) {
   }
   var chosenIndex = 0;
   for (var b = 0; b < enemies.length; b++) {
-    if (enemy.tough < enemies[b].tough) {
+    if (enemy.pos.y > enemies[b].pos.y) {
       chosenIndex = b;
       break;
-    } else if (enemy.heal >= enemies[b].heal) {
-      if (enemy.heal > enemies[b].heal) {
+    } else if (enemy.pos.y == enemies[b].pos.y) {
+      if (enemy.tough < enemies[b].tough) {
         chosenIndex = b;
         break;
-      } else if (enemy.attack >= enemies[b].attack) {
-        if (enemy.attack > enemies[b].attack) {
+      } else if (enemy.heal >= enemies[b].heal) {
+        if (enemy.heal > enemies[b].heal) {
           chosenIndex = b;
           break;
-        } else if (enemy.ranged > enemies[b].ranged) {
-          chosenIndex = b;
-          break;
+        } else if (enemy.attack >= enemies[b].attack) {
+          if (enemy.attack > enemies[b].attack) {
+            chosenIndex = b;
+            break;
+          } else if (enemy.ranged > enemies[b].ranged) {
+            chosenIndex = b;
+            break;
+          }
         }
       }
     }
@@ -256,7 +263,7 @@ for (var a = 0; a < freeCarries.length; a++) {
       creep.memory.targetPos = spawn.pos;
     }
   } else if (chosenKey !== '' && (minDistance < 4 || stayPut == false)) {
-    creep.say(chosenKey);
+    // creep.say(chosenKey);
     creep.memory.targetPos = posFromKey(chosenKey);
     drops[chosenKey] -= freeSpace;
     addToSourceArea(creep.memory.targetPos, -freeSpace, true);
@@ -375,7 +382,7 @@ createCrp('carry', 2, [Game.CARRY, Game.CARRY, Game.CARRY, Game.MOVE, Game.MOVE]
       creep.moveTo(creep.memory.targetPos);
     }
   } else if (calculateDistance(spawn.pos, creep.pos) < 4) {
-    creep.say('Nothing to do!');
+    // creep.say('#');
     creep.moveTo(spawn.pos.x, spawn.pos.y + 4);
   }
   var localDrops = creep.pos.findInRange(Game.DROPPED_ENERGY, 1);
@@ -584,7 +591,7 @@ if (crp.guard.count > 2) {
   crp.harvester.maxCount = 10;
 }
 if (crp.guard.count > 3) {
-  if (room.getPositionAt(45, 42).findInRange(Game.CONSTRUCTION_SITES, 5).length) {
+  if (room.find(Game.MY_STRUCTURES).length < 2) {
     crp.builder.maxCount = 2;
   }
   crp.builderCarry.maxCount = 2;
@@ -605,14 +612,16 @@ if (crp.guard.count > 100) {
 // crp.healer.maxCount = Math.floor(crp['guard'].count / 4);
 
 var exts = room.find(Game.MY_STRUCTURES);
-for (var a = 0; a < exts.length; a++) {
+var extCount = 0;
+for (var a = 0; a < exts.length && extCount < 4; a++) {
   if (exts[a].structureType == Game.STRUCTURE_EXTENSION) {
+    extCount++;
     crp.guard.body.splice(0, 1);
     crp.guard.body.push(Game.RANGED_ATTACK);
     crp.healer.body.push(Game.HEAL);
     if (crp.carry.body.length < 6) {
       crp.carry.body.push(Game.MOVE);
-      crp.carry.maxCount = 8;
+      // crp.carry.maxCount = 8;
     }
   }
 }
