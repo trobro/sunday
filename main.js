@@ -30,17 +30,19 @@ function getRoom() {
 }
 
 function avoidEnemies(creep) {
-  var enemy = creep.pos.findInRange(Game.HOSTILE_CREEPS, 5);
-  if (enemy.length) {
-    delete creep.memory.targetPos;
-    creep.safePos = {'x': creep.pos.x - (enemy[0].pos.x - creep.pos.x),
-      'y': creep.pos.y - (enemy[0].pos.y - creep.pos.y)};
+  if (creep.pos.y <= grY + 2) {
+    var enemy = creep.pos.findInRange(Game.HOSTILE_CREEPS, 5);
+    if (enemy.length) {
+      delete creep.memory.targetPos;
+      creep.memory.safePos = {'x': creep.pos.x - (enemy[0].pos.x - creep.pos.x),
+        'y': creep.pos.y - (enemy[0].pos.y - creep.pos.y)};
+    }
   }
-  if ('safePos' in creep) {
-    if (creep.moveTo(creep.safePos) != Game.OK ||
-      calculateDistance(creep.pos, creep.safePos) < 2)
+  if ('safePos' in creep.memory) {
+    if (creep.moveTo(creep.memory.safePos) != Game.OK ||
+      calculateDistance(creep.pos, creep.memory.safePos) < 2)
     {
-      delete creep.safePos;
+      delete creep.memory.safePos;
     }
     return true;
   }
@@ -49,17 +51,25 @@ function avoidEnemies(creep) {
 
 var room = getRoom();
 var spawn = room.find(Game.MY_SPAWNS)[0];
-room.createConstructionSite(3, 41, Game.STRUCTURE_EXTENSION);
-room.createConstructionSite(4, 41, Game.STRUCTURE_EXTENSION);
-// room.createConstructionSite(5, 41, Game.STRUCTURE_EXTENSION);
-room.createConstructionSite(46, 42, Game.STRUCTURE_EXTENSION);
-room.createConstructionSite(45, 42, Game.STRUCTURE_EXTENSION);
-// room.createConstructionSite(44, 42, Game.STRUCTURE_EXTENSION);
-// room.createConstructionSite(spawn.pos.x, spawn.pos.y + 2, Game.STRUCTURE_EXTENSION);
-// room.createConstructionSite(spawn.pos.x + 1, spawn.pos.y + 2, Game.STRUCTURE_EXTENSION);
-// room.createConstructionSite(spawn.pos.x + 2, spawn.pos.y + 2, Game.STRUCTURE_EXTENSION);
-// room.createConstructionSite(spawn.pos.x + 2, spawn.pos.y + 1, Game.STRUCTURE_EXTENSION);
-// room.createConstructionSite(spawn.pos.x + 2, spawn.pos.y, Game.STRUCTURE_EXTENSION);
+var targetStructureCount = 9;
+
+function build(x, y, type) {
+  room.createConstructionSite(x, y, (type ? type : Game.STRUCTURE_EXTENSION));
+  targetStructureCount++;
+}
+
+build(3, 41);
+build(4, 41);
+build(5, 41);
+build(46, 42);
+build(45, 42);
+build(44, 42);
+// build(spawn.pos.x, spawn.pos.y + 2);
+// build(spawn.pos.x + 1, spawn.pos.y + 2);
+// build(spawn.pos.x + 2, spawn.pos.y + 2);
+// build(spawn.pos.x + 2, spawn.pos.y + 1);
+// build(spawn.pos.x + 2, spawn.pos.y);
+// build(spawn.pos.x, spawn.pos.y + 3, Game.STRUCTURE_SPAWN);
 
 var tmpEnemies = room.find(Game.HOSTILE_CREEPS);
 var enemies = [];
@@ -90,12 +100,12 @@ for (var a = 0; a < tmpEnemies.length; a++) {
       if (enemy.tough < enemies[b].tough) {
         chosenIndex = b;
         break;
-      } else if (enemy.heal >= enemies[b].heal) {
-        if (enemy.heal > enemies[b].heal) {
+      } else if (enemy.attack >= enemies[b].attack) {
+        if (enemy.attack > enemies[b].attack) {
           chosenIndex = b;
           break;
-        } else if (enemy.attack >= enemies[b].attack) {
-          if (enemy.attack > enemies[b].attack) {
+        } else if (enemy.heal >= enemies[b].heal) {
+          if (enemy.heal > enemies[b].heal) {
             chosenIndex = b;
             break;
           } else if (enemy.ranged > enemies[b].ranged) {
@@ -197,6 +207,8 @@ for (var i in Game.creeps) {
     var damage = creep.hitsMax - creep.hits;
     if (damage < 200) {
       damage -= 4000;
+    } else if (creep.memory.role == 'healer') {
+      damage += 4000;
     }
     creep.damage = damage;
     var chosenIndex = 0;
@@ -220,15 +232,17 @@ for (var i in Game.creeps) {
         addToDrops(creep.pos, creep.energy, false);
       }
     } else if (creep.memory.role == 'carry') {
-      var spaceFree = creep.energyCapacity - creep.energy;
-      if (!('targetPos' in creep.memory)) {
-        if (spaceFree > 0) {
-          freeCarries.push(creep);
-        } else {
-          creep.memory.targetPos = spawn.pos;
+      if (!('safePos' in creep.memory)) {
+        var spaceFree = creep.energyCapacity - creep.energy;
+        if (!('targetPos' in creep.memory)) {
+          if (spaceFree > 0) {
+            freeCarries.push(creep);
+          } else {
+            creep.memory.targetPos = spawn.pos;
+          }
+        } else if (spaceFree > 0) {
+          addToDrops(creep.memory.targetPos, -spaceFree, true);
         }
-      } else if (spaceFree > 0) {
-        addToDrops(creep.memory.targetPos, -spaceFree, true);
       }
     } else if (creep.memory.role == 'builder') {
       if (creep.ticksToLive > lifeLongLimit && creep.memory.workCenter.x < 27) {
@@ -353,7 +367,11 @@ createCrp('builder', 0, [Game.WORK, Game.WORK, Game.CARRY, Game.CARRY, Game.MOVE
 });
 
 createCrp('spawnBuilder', 0, [Game.WORK, Game.WORK, Game.CARRY, Game.CARRY, Game.MOVE], function(creep) {
-  spawn.transferEnergy(creep);
+  if (spawn.energy > 4000 || room.find(Game.MY_STRUCTURES).length <
+    targetStructureCount)
+  {
+    spawn.transferEnergy(creep);
+  }
   var sites = spawn.pos.findInRange(Game.CONSTRUCTION_SITES, 5);
   if (sites.length) {
     creep.build(sites[0]);
@@ -441,53 +459,56 @@ createCrp('builderCarry', 0, [Game.CARRY, Game.CARRY, Game.CARRY, Game.CARRY, Ga
   } else if (creep.energy && creep.pos.findInRange(
     Game.CONSTRUCTION_SITES, 0).length == 0)
   {
-    var exts = workCenter.findInRange(Game.MY_STRUCTURES, 10);
     var minDistance = 100000;
-    for (var a = 0; a < exts.length; a++) {
-      if (exts[a].energy < exts[a].energyCapacity) {
-        var distance = calculateDistance(creep.pos, exts[a].pos);
-        if (distance < minDistance) {
-          creep.memory.targetObj = exts[a].pos;
-        }
+    var localCreeps = workCenter.findInRange(Game.MY_CREEPS, 10);
+    for (var a = 0; a < localCreeps.length; a++) {
+      if (localCreeps[a].memory.role == 'builder' &&
+        localCreeps[a].energy == 0)
+      {
+        creep.memory.targetObj = localCreeps[a].pos;
+        break;
       }
     }
     if (!('targetObj' in creep.memory)) {
-      var localCreeps = workCenter.findInRange(Game.MY_CREEPS, 10);
-      for (var a = 0; a < localCreeps.length; a++) {
-        if (localCreeps[a].memory.role == 'builder' &&
-          localCreeps[a].energy < localCreeps[a].energyCapacity)
-        {
-          creep.memory.targetObj = localCreeps[a].pos;
-          break;
+      var exts = workCenter.findInRange(Game.MY_STRUCTURES, 10);
+      for (var a = 0; a < exts.length; a++) {
+        if (exts[a].energy < exts[a].energyCapacity) {
+          var distance = calculateDistance(creep.pos, exts[a].pos);
+          if (distance < minDistance) {
+            creep.memory.targetObj = exts[a].pos;
+          }
         }
       }
     }
   } else {
     var minDistance = 100000;
-    var localCreeps = workCenter.findInRange(Game.MY_CREEPS, 10);
-    for (var a = 0; a < localCreeps.length; a++) {
-      if (localCreeps[a].memory.role == 'harvester' &&
-        localCreeps[a].energy)
-      {
-        var distance = calculateDistance(creep.pos, localCreeps[a].pos);
-        if (distance < minDistance) {
-          minDistance = distance;
-          creep.memory.sourceObj = localCreeps[a].pos;
-        }
-      }
-    }
     localDrops = workCenter.findInRange(Game.DROPPED_ENERGY, 10);
     for (var a = 0; a < localDrops.length; a++) {
-      var distance = calculateDistance(creep.pos, localDrops[a].pos);
+      var distance = (localDrops[a].energy > 200 ? 0 :
+        calculateDistance(creep.pos, localDrops[a].pos));
       if (distance < minDistance) {
         minDistance = distance;
         creep.memory.sourceObj = localDrops[a].pos;
       }
     }
+    if (minDistance > 0) {
+      var localCreeps = workCenter.findInRange(Game.MY_CREEPS, 10);
+      for (var a = 0; a < localCreeps.length; a++) {
+        if (localCreeps[a].memory.role == 'harvester' &&
+          localCreeps[a].energy)
+        {
+          var distance = calculateDistance(creep.pos, localCreeps[a].pos);
+          if (distance < minDistance) {
+            minDistance = distance;
+            creep.memory.sourceObj = localCreeps[a].pos;
+          }
+        }
+      }
+    }
   }
 });
 
-createCrp('healer', 0, [Game.MOVE, Game.HEAL, Game.HEAL, Game.HEAL, Game.HEAL], function(creep) {
+createCrp('healer', 0, [Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.MOVE, Game.HEAL, Game.HEAL, Game.HEAL, Game.HEAL], function(creep) {
   if (enemies.length > healLimit) {
     return;
   }
@@ -571,20 +592,23 @@ for (var b = 0; b < grid.length - 1; b++) {
         grid[b][a+1].move(Game.LEFT);
         grid[b][a] = grid[b][a+1];
         grid[b][a+1] = null;
-      } else if (canMove(a + 1, b + 1) && (!grid[b][a+1] || !grid[b+1][a]) &&
-        (b > 1 || grid[b+1][a+1].memory.role == 'guard'))
-      {
-          // console.log('move TL ' + grid[b+1][a+1].name);
-        grid[b+1][a+1].move(Game.TOP_LEFT);
-        grid[b][a] = grid[b+1][a+1];
-        grid[b+1][a+1] = null;
-      } else if (canMove(a, b + 1) &&
-         (b > 1 || grid[b+1][a].memory.role == 'guard'))
-      {
-          // console.log('move TOP ' + grid[b+1][a].name);
-        grid[b+1][a].move(Game.TOP);
-        grid[b][a] = grid[b+1][a];
-        grid[b+1][a] = null;
+      } else if (b > 0 || grX + a != 29 && grX + a != 30) {
+        if ((b > 0 || grX + a != 29 && grX + a != 30) &&
+          canMove(a + 1, b + 1) && (!grid[b][a+1] || !grid[b+1][a]) &&
+          (b > 1 || grid[b+1][a+1].memory.role == 'guard'))
+        {
+            // console.log('move TL ' + grid[b+1][a+1].name);
+          grid[b+1][a+1].move(Game.TOP_LEFT);
+          grid[b][a] = grid[b+1][a+1];
+          grid[b+1][a+1] = null;
+        } else if (canMove(a, b + 1) &&
+           (b > 1 || grid[b+1][a].memory.role == 'guard'))
+        {
+            // console.log('move TOP ' + grid[b+1][a].name);
+          grid[b+1][a].move(Game.TOP);
+          grid[b][a] = grid[b+1][a];
+          grid[b+1][a] = null;
+        }
       }
     }
   }
@@ -610,14 +634,14 @@ if (crp.guard.count > 2) {
   crp.harvester.maxCount = 10;
 }
 if (crp.guard.count > 3) {
-  if (room.find(Game.MY_STRUCTURES).length < 10) {
+  if (room.find(Game.MY_STRUCTURES).length < targetStructureCount) {
     crp.builder.maxCount = 2;
   }
   crp.builderCarry.maxCount = 2;
 }
-if (crp.guard.count > 4) {
+// if (crp.guard.count > 4) {
   // crp.spawnBuilder.maxCount = 1;
-}
+// }
 if (crp.guard.count > 6) {
   crp.healer.maxCount = 4;
 }
