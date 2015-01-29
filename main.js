@@ -4,6 +4,8 @@ var lifeLimit = 30;
 var lifeLongLimit = 190;
 var grX = 20;
 var grY = 9;
+var grXe = -1;
+var grYe = -1;
 var crp = {};
 var allowLooting = false;
 
@@ -50,6 +52,7 @@ function avoidEnemies(creep) {
 }
 
 var room = getRoom();
+var roomGrid = room.lookAtArea(0, 0, 49, 49);
 var spawns = room.find(Game.MY_SPAWNS);
 for (var a = 0; a < spawns.length; a++) {
   var spawn = spawns[a];
@@ -137,9 +140,20 @@ var sourceAreas = [];
 for (var a = 0; a < 3; a++) {
   sourceAreas.push({'carries': 0, 'energy': 0});
 }
-var grid = [];
 var hasLeftBuilder = false;
 var hasLeftBuilderCarry = false;
+
+function getObstacle(x, y) {
+  var o = roomGrid[y][x];
+  for (var a = 0; a < o.length; a++) {
+    if ((o[a].type != 'terrain' && !(o[a].type == 'structure' &&
+      o[a].structure == 'rampart' && o[a].my)) || o[a].terrain == 'wall')
+    {
+      return o[a];
+    }
+  }
+  return null;
+}
 
 function toIndex(pos) {
   return pos.x / 18 >> 0;
@@ -185,30 +199,9 @@ function posFromKey(key) {
 }
 
 function addToGrid(obj) {
-  if (spawn.pos.y > 27 || obj.pos.y < grY) {
-    return;
-  }
-  var x = obj.pos.x - grX;
-  var y = obj.pos.y - grY;
-  while (grid.length - 2 < y) {
-    grid.push([]);
-  }
-  var maxLength = x + 2;
-  for (var b = 0; b < grid.length; b++) {
-    if (grid[b].length > maxLength) {
-      maxLength = grid[b].length;
-    }
-  }
-  for (var b = 0; b < grid.length; b++) {
-    for (var a = grid[b].length; a < maxLength; a++) {
-      grid[b].push(null);
-    }
-  }
-  grid[y][x] = obj;
+  grXe = Math.max(grXe, obj.pos.x);
+  grYe = Math.max(grYe, obj.pos.y);
 }
-
-addToGrid(spawn);
-addToGrid({'pos': {'x': 30, 'y': 7}});
 
 for (var i in Game.creeps) {
   var creep = Game.creeps[i];
@@ -590,50 +583,55 @@ for (var i in Game.creeps) {
   {
     crp[creep.memory.role].count++;
   }
-  if (crp[creep.memory.role]) {
+  if (crp[creep.memory.role] && !creep.spawning) {
     crp[creep.memory.role].action(creep);
   }
 }
 
-function canMove(w, h) {
-  return grid[h][w] && ('move' in grid[h][w]) && !grid[h][w].fatigue;
+function getMovable(x, y) {
+  var o = getObstacle(x, y);
+  var c = (o ? o.creep : null);
+  return (c && c.my && (c.memory.role == 'healer' ||
+    c.memory.role == 'guard') && !c.fatigue) ? c : null;
 }
 
-var thestring = '';
-for (var b = 0; b < grid.length - 1; b++) {
-  for (var a = 1; a < grid[b].length - 1; a++) {
-      thestring += (!grid[b][a] ? '0' : '1');
-    if (!grid[b][a]) {
-      if (canMove(a + 1, b) &&
-        (b < 2 || grid[b][a+1].memory.role == 'healer'))
-      {
-          // console.log('move LEFT ' + grid[b][a+1].name);
-        grid[b][a+1].move(Game.LEFT);
-        grid[b][a] = grid[b][a+1];
-        grid[b][a+1] = null;
-      } else if (true || b > 0 || grX + a != 29 && grX + a != 30) {
-        if ((b > 0 || grX + a != 29 && grX + a != 30) &&
-          canMove(a + 1, b + 1) && (!grid[b][a+1] || !grid[b+1][a]) &&
-          (b > 1 || grid[b+1][a+1].memory.role == 'guard'))
+function moveMovable(m, d) {
+  var arr = roomGrid[m.pos.y][m.pos.x];
+  for (var a = 0; a < arr.length; a++) {
+    if (arr[a].type == 'creep') {
+      arr.splice(a, 1);
+      break;
+    }
+  }
+  roomGrid[y - (d == Game.LEFT ? 0 : 1)][x - (d == Game.TOP ? 0 : 1)].push(m);
+  m.move(d);
+}
+
+for (var y = grY; y <= grYe; y++) {
+  for (var x = grX; x <= grXe; x++) {
+    if (!getObstacle(x, y)) {
+      var m = getMovable(x + 1, y);
+      if (m && (y - grY < 2 || m.memory.role == 'healer')) {
+          console.log('left ');
+        moveMovable(m, Game.LEFT);
+      } else {
+        m = getMovable(x + 1, y + 1);
+        if (m && (!getObstacle(x, y + 1) || !getObstacle(x + 1, y)) &&
+          (y - grY > 1 || m.memory.role == 'guard'))
         {
-            // console.log('move TL ' + grid[b+1][a+1].name);
-          grid[b+1][a+1].move(Game.TOP_LEFT);
-          grid[b][a] = grid[b+1][a+1];
-          grid[b+1][a+1] = null;
-        } else if (canMove(a, b + 1) &&
-           (b > 1 || grid[b+1][a].memory.role == 'guard'))
-        {
-            // console.log('move TOP ' + grid[b+1][a].name);
-          grid[b+1][a].move(Game.TOP);
-          grid[b][a] = grid[b+1][a];
-          grid[b+1][a] = null;
+          console.log('topleft ');
+          moveMovable(m, Game.TOP_LEFT);
+        } else {
+          m = getMovable(x, y + 1);
+          if (m && (y - grY > 1 || m.memory.role == 'guard')) {
+            console.log('top');
+            moveMovable(m, Game.TOP);
+          }
         }
       }
     }
   }
-  thestring += '\n';
 }
-// console.log('################################\n' + thestring);
 
 crp.harvester.maxCount = 2;
 crp.carry.maxCount = 2;
@@ -675,6 +673,7 @@ if (spawn.pos.y > 27) {
   crp.carry.maxCount = 0;
   crp.builderCarry.maxCount = 0;
   crp.healer.maxCount = 0;
+  crp.guard.body = [Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.MOVE];
 }
 
 var extCount = 0;
