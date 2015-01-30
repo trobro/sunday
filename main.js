@@ -8,6 +8,39 @@ var grXe = -1;
 var grYe = -1;
 var crp = {};
 var allowLooting = false;
+var room = Game.rooms[Object.keys(Game.rooms)[0]];
+var roomGrid = room.lookAtArea(0, 0, 49, 49);
+var toMove = [];
+var obstacles = [];
+var spawns = room.find(Game.MY_SPAWNS);
+for (var a = 0; a < spawns.length; a++) {
+  var spawn = spawns[a];
+  if (spawns[a].pos.y < 27) {
+    break;
+  }
+}
+var structs = room.find(Game.MY_STRUCTURES);
+var targetStructureCount = 9;
+var sources = room.find(Game.SOURCES);
+var sourceByKey = {};
+for (var a = 0; a < sources.length; a++) {
+  sources[a].assCount = 0;
+  sourceByKey[sources[a].id] = sources[a];
+}
+var healTargets = [];
+var drops = {};
+var freeCarries = [];
+var sourceAreas = [];
+for (var a = 0; a < 3; a++) {
+  sourceAreas.push({'carries': 0, 'energy': 0});
+}
+var hasLeftBuilder = false;
+var hasLeftBuilderCarry = false;
+
+
+function prep4mem(pos) {
+  return {'x': pos.x, 'y': pos.y};
+}
 
 function createCrp(typeName, maxCount, body, action) {
   crp[typeName] = {
@@ -19,16 +52,9 @@ function createCrp(typeName, maxCount, body, action) {
   };
 }
 
-
 function calculateDistance(pos1, pos2) {
   return Math.max(Math.abs(pos1.x - pos2.x),
     Math.abs(pos1.y - pos2.y));
-}
-
-function getRoom() {
-  for (var key in Game.rooms) {
-    return Game.rooms[key];
-  }
 }
 
 function avoidEnemies(creep) {
@@ -50,18 +76,6 @@ function avoidEnemies(creep) {
   }
   return false;
 }
-
-var room = getRoom();
-var roomGrid = room.lookAtArea(0, 0, 49, 49);
-var spawns = room.find(Game.MY_SPAWNS);
-for (var a = 0; a < spawns.length; a++) {
-  var spawn = spawns[a];
-  if (spawns[a].pos.y < 27) {
-    break;
-  }
-}
-var structs = room.find(Game.MY_STRUCTURES);
-var targetStructureCount = 9;
 
 function build(x, y, type) {
   room.createConstructionSite(x, y, (type ? type : Game.STRUCTURE_EXTENSION));
@@ -126,22 +140,6 @@ for (var a = 0; a < tmpEnemies.length; a++) {
   }
   enemies.splice(chosenIndex, 0, enemy);
 }
-
-var sources = room.find(Game.SOURCES);
-var sourceByKey = {};
-for (var a = 0; a < sources.length; a++) {
-  sources[a].assCount = 0;
-  sourceByKey[sources[a].id] = sources[a];
-}
-var healTargets = [];
-var drops = {};
-var freeCarries = [];
-var sourceAreas = [];
-for (var a = 0; a < 3; a++) {
-  sourceAreas.push({'carries': 0, 'energy': 0});
-}
-var hasLeftBuilder = false;
-var hasLeftBuilderCarry = false;
 
 function getObstacle(x, y) {
   var o = roomGrid[y][x];
@@ -221,6 +219,9 @@ for (var i in Game.creeps) {
     }
     healTargets.splice(chosenIndex, 0, creep);
   }
+  if (creep.memory.role != 'carry') {
+    obstacles.push(creep);
+  }
   if ((creep.memory.role == 'guard' || creep.memory.role == 'healer') &&
     !creep.spawning)
   {
@@ -242,7 +243,7 @@ for (var i in Game.creeps) {
           if (spaceFree > 0) {
             freeCarries.push(creep);
           } else {
-            creep.memory.targetPos = spawn.pos;
+            creep.memory.targetPos = prep4mem(spawn.pos);
           }
         } else if (spaceFree > 0) {
           addToDrops(creep.memory.targetPos, -spaceFree, true);
@@ -290,13 +291,14 @@ for (var a = 0; a < freeCarries.length; a++) {
   if (minDistance > 4 && creep.energy) {
     var localSources = creep.pos.findInRange(Game.SOURCES, 4);
     if (localSources.length == 0 || !localSources[0].energy) {
-      creep.memory.targetPos = spawn.pos;
+      creep.memory.targetPos = prep4mem(spawn.pos);
     }
   } else if (chosenKey !== '' && (minDistance < 4 || stayPut == false)) {
     // creep.say(chosenKey);
-    creep.memory.targetPos = posFromKey(chosenKey);
+    var targetPos = posFromKey(chosenKey);
+    creep.memory.targetPos = prep4mem(targetPos);
     drops[chosenKey] -= freeSpace;
-    addToSourceArea(creep.memory.targetPos, -freeSpace, true);
+    addToSourceArea(targetPos, -freeSpace, true);
   } else if (stayPut) {
     addToSourceArea(creep.pos, -freeSpace, true);
   }
@@ -352,7 +354,7 @@ createCrp('builder', 0, [Game.WORK, Game.WORK, Game.CARRY, Game.CARRY, Game.MOVE
         (creep.memory.workCenter.x <= 27 &&
         sites[a].pos.x < creep.memory.targetConstruction.x))
       {
-        creep.memory.targetConstruction = sites[a].pos;
+        creep.memory.targetConstruction = prep4mem(sites[a].pos);
       }
     }
   }
@@ -406,22 +408,40 @@ createCrp('carry', 2, [Game.CARRY, Game.CARRY, Game.CARRY, Game.MOVE, Game.MOVE]
     return;
   }
   if (creep.energy == creep.energyCapacity) {
-    creep.memory.targetPos = spawn.pos;
+    creep.memory.targetPos = prep4mem(spawn.pos);
   }
   if ('targetPos' in creep.memory) {
     if (calculateDistance(creep.memory.targetPos, creep.pos) < 2) {
       if (spawn.pos.equalsTo(creep.memory.targetPos) &&
         creep.transferEnergy(spawn) != Game.OK)
       {
-        creep.move(spawn.pos.getDirectionTo(creep));
+        creep.memory.targetPos.x -= 2 * (creep.memory.targetPos.x - creep.pos.x);
+        creep.memory.targetPos.y -= 2 * (creep.memory.targetPos.y - creep.pos.y);
+      } else {
+        delete creep.memory.targetPos;
+        delete creep.memory.path;
       }
-      delete creep.memory.targetPos;
-    } else {
-      creep.moveTo(creep.memory.targetPos, {'reusePath': 2});
     }
   } else if (calculateDistance(spawn.pos, creep.pos) < 4) {
     // creep.say('#');
-    creep.moveTo(spawn.pos.x, spawn.pos.y + 4);
+    creep.memory.targetPos = {'x': spawn.pos.x, 'y': spawn.pos.y + 8};
+  }
+  if ('targetPos' in creep.memory) {
+    var targetPos = room.getPositionAt(creep.memory.targetPos.x,
+      creep.memory.targetPos.y);
+    if (!('path' in creep.memory) || !targetPos.equalsTo(
+      creep.memory.path[creep.memory.path.length - 1]))
+    {
+      creep.memory.path = room.findPath(creep.pos, targetPos,
+        {'ignoreCreeps': true, 'avoid': obstacles});
+    } else if (creep.pos.equalsTo(creep.memory.path[0])) {
+      if (creep.memory.path.length == 1) {
+        delete creep.memory.path;
+      } else {
+        creep.memory.path.splice(0, 1);
+      }
+    }
+    toMove.push(creep);
   }
   var localDrops = creep.pos.findInRange(Game.DROPPED_ENERGY, 1);
   if (localDrops.length) {
@@ -469,7 +489,7 @@ createCrp('builderCarry', 0, [Game.CARRY, Game.CARRY, Game.CARRY, Game.CARRY, Ga
       if (localCreeps[a].memory.role == 'builder' &&
         localCreeps[a].energy == 0)
       {
-        creep.memory.targetObj = localCreeps[a].pos;
+        creep.memory.targetObj = prep4mem(localCreeps[a].pos);
         break;
       }
     }
@@ -482,7 +502,7 @@ createCrp('builderCarry', 0, [Game.CARRY, Game.CARRY, Game.CARRY, Game.CARRY, Ga
         {
           var distance = calculateDistance(creep.pos, exts[a].pos);
           if (distance < minDistance) {
-            creep.memory.targetObj = exts[a].pos;
+            creep.memory.targetObj = prep4mem(exts[a].pos);
           }
         }
       }
@@ -495,7 +515,7 @@ createCrp('builderCarry', 0, [Game.CARRY, Game.CARRY, Game.CARRY, Game.CARRY, Ga
         calculateDistance(creep.pos, localDrops[a].pos));
       if (distance < minDistance) {
         minDistance = distance;
-        creep.memory.sourceObj = localDrops[a].pos;
+        creep.memory.sourceObj = prep4mem(localDrops[a].pos);
       }
     }
     if (minDistance > 0) {
@@ -507,7 +527,7 @@ createCrp('builderCarry', 0, [Game.CARRY, Game.CARRY, Game.CARRY, Game.CARRY, Ga
           var distance = calculateDistance(creep.pos, localCreeps[a].pos);
           if (distance < minDistance) {
             minDistance = distance;
-            creep.memory.sourceObj = localCreeps[a].pos;
+            creep.memory.sourceObj = prep4mem(localCreeps[a].pos);
           }
         }
       }
@@ -595,16 +615,16 @@ function getMovable(x, y) {
     c.memory.role == 'guard') && !c.fatigue) ? c : null;
 }
 
-function moveMovable(m, d) {
+function moveMovable(m, dx, dy) {
   var arr = roomGrid[m.pos.y][m.pos.x];
   for (var a = 0; a < arr.length; a++) {
-    if (arr[a].type == 'creep') {
+    if (arr[a].type == 'creep' && arr[a].creep == m) {
       arr.splice(a, 1);
       break;
     }
   }
-  roomGrid[y - (d == Game.LEFT ? 0 : 1)][x - (d == Game.TOP ? 0 : 1)].push(m);
-  m.move(d);
+  roomGrid[m.pos.y + dy][m.pos.x + dx].push(m);
+  m.move(m.pos.getDirectionTo(m.pos.x + dx, m.pos.y + dy);
 }
 
 for (var y = grY; y <= grYe; y++) {
@@ -612,26 +632,59 @@ for (var y = grY; y <= grYe; y++) {
     if (!getObstacle(x, y)) {
       var m = getMovable(x + 1, y);
       if (m && (y - grY < 2 || m.memory.role == 'healer')) {
-          console.log('left ');
-        moveMovable(m, Game.LEFT);
+        moveMovable(m, -1, 0);
       } else {
         m = getMovable(x + 1, y + 1);
         if (m && (!getObstacle(x, y + 1) || !getObstacle(x + 1, y)) &&
           (y - grY > 1 || m.memory.role == 'guard'))
         {
-          console.log('topleft ');
-          moveMovable(m, Game.TOP_LEFT);
+          moveMovable(m, -1, -1);
         } else {
           m = getMovable(x, y + 1);
           if (m && (y - grY > 1 || m.memory.role == 'guard')) {
-            console.log('top');
-            moveMovable(m, Game.TOP);
+            moveMovable(m, 0, -1);
           }
         }
       }
     }
   }
 }
+
+// function doChainMove(creep, moveIndex) {
+  // if (!('moveIndex' in creep) && ('path' in creep.memory)) {
+    // creep.moveIndex = moveIndex;
+    // var node = creep.memory.path[0];
+    // var obstacle = getObstacle(node.x, node.y);
+    // // if (!obstacle || 
+  // }
+  // return false;
+// }
+
+// // console.log('Carson: ' + Game.creeps.Carson.move(Game.RIGHT));
+// // console.log('Maya: ' + Game.creeps.Maya.move(Game.LEFT));
+// for (var moveIndex = 0; moveIndex < toMove.length; moveIndex++) {
+  // doChainMove(toMove[moveIndex]);
+  // // var creep = toMove[moveIndex];
+  // // var chainedMoves = [];
+  // // for (;;) {
+    // // if (!('moveIndex' in creep) && ('path' in creep.memory)) {
+      // // // console.log('#################');
+      // // // for (var a = 0; a < creep.memory.path.length; a++) {
+        // // // var keys = Object.keys(creep.memory.path[a]);
+        // // // for (var b = 0; b < keys.length; b++) {
+          // // // console.log(keys[b] + ': ' + creep.memory.path[a][keys[b]]);
+        // // // }
+      // // // }
+      // // creep.moveIndex = moveIndex;
+      // // chainedMoves.push(creep);
+      // // var node = creep.memory.path[0];
+      // // var obstacle = getObstacle(node.x, node.y);
+      // // if (!obstacle)
+      // // moveMovable(creep, node.dx, node.dy);
+      // // console.log(creep.name + ' ' + node.direction);
+    // // }
+  // // }
+// }
 
 crp.harvester.maxCount = 2;
 crp.carry.maxCount = 2;
