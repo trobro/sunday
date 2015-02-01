@@ -820,9 +820,8 @@ if (crp.guard.count > 2) {
   crp.harvester.maxCount = 10;
 }
 if (crp.guard.count > 3) {
-  if (targetStructureCount - structs.length > 11) {
-    crp.builder.maxCount = 2;
-  }
+  crp.builder.maxCount = Math.max(0, Math.min(2, targetStructureCount -
+    structs.length - 8));
   crp.builderCarry.maxCount = 2;
 }
 if (crp.guard.count > 4) {
