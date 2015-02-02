@@ -1,5 +1,3 @@
-var enLimit = 60;
-var healLimit = 100;
 var lifeLimit = 30;
 var lifeLongLimit = 190;
 var grX = 21;
@@ -11,7 +9,6 @@ var allowLooting = true;
 var room = Game.rooms[Object.keys(Game.rooms)[0]];
 var roomGrid = room.lookAtArea(0, 0, 49, 49);
 var toMove = [];
-var toMoveDiag = [];
 var obstacles = [];
 var enemyFence = [];
 var spawns = room.find(Game.MY_SPAWNS);
@@ -83,11 +80,8 @@ function addToObstacles(obj) {
 
 function addToToMove(creep) {
   if (creep.memory.path && creep.memory.path.length) {
-    if (creep.memory.path[0].dx && creep.memory.path[0].dy) {
-      toMove.push(creep);
-    } else {
-      toMove.splice(0, 0, creep);
-    }
+    creep.isDiag = (creep.memory.path[0].dx && creep.memory.path[0].dy);
+    toMove.push(creep);
   }
 }
 
@@ -193,9 +187,9 @@ if (enemies.length) {
 function getObstacle(x, y) {
   var o = roomGrid[y][x];
   for (var a = 0; a < o.length; a++) {
-    if ((o[a].type != 'terrain' && o[a].type != 'constructionSite' &&
-      !(o[a].type == 'structure' && o[a].structure.structureType ==
-      'rampart' && o[a].structure.my)) || o[a].terrain == 'wall')
+    if (o[a].type == 'creep' || (o[a].type == 'terrain' &&
+      o[a].terrain == 'wall') || (o[a].type == 'structure' &&
+      !(o[a].structure.structureType == 'rampart' && o[a].structure.my)))
     {
       return o[a];
     }
@@ -253,7 +247,7 @@ function addToGrid(obj) {
 
 for (var i in Game.creeps) {
   var creep = Game.creeps[i];
-  if (enemies.length <= healLimit && creep.hits < creep.hitsMax) {
+  if (creep.hits < creep.hitsMax) {
     var damage = creep.hitsMax - creep.hits;
     if (damage < 200) {
       damage -= 4000;
@@ -276,7 +270,7 @@ for (var i in Game.creeps) {
     !creep.spawning)
   {
     addToGrid(creep);
-  } else if (enemies.length <= enLimit) {
+  } else {
     if (creep.memory.role == 'harvester') {
       if (creep.ticksToLive > (creep.pos.y > 27 != spawn.pos.y > 27 ?
         lifeLongLimit : lifeLimit))
@@ -446,9 +440,6 @@ createCrp('spawnBuilder', 0, [Game.WORK, Game.WORK, Game.CARRY, Game.CARRY, Game
 });
 
 createCrp('carry', 2, [Game.CARRY, Game.CARRY, Game.CARRY, Game.MOVE, Game.MOVE], function(creep) {
-  if (enemies.length > enLimit) {
-    return;
-  }
   if (creep.hitsMax - creep.hits >= 300) {
     creep.suicide();
     return;
@@ -508,9 +499,6 @@ createCrp('carry', 2, [Game.CARRY, Game.CARRY, Game.CARRY, Game.MOVE, Game.MOVE]
 });
 
 createCrp('builderCarry', 0, [Game.CARRY, Game.CARRY, Game.CARRY, Game.CARRY, Game.MOVE], function(creep) {
-  if (enemies.length > enLimit) {
-    return;
-  }
   var localDrops = creep.pos.findInRange(Game.DROPPED_ENERGY, 1);
   if (localDrops.length) {
     creep.pickup(localDrops[0]);
@@ -594,9 +582,6 @@ createCrp('builderCarry', 0, [Game.CARRY, Game.CARRY, Game.CARRY, Game.CARRY, Ga
 });
 
 createCrp('healer', 0, [Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.MOVE, Game.HEAL, Game.HEAL, Game.HEAL, Game.HEAL], function(creep) {
-  if (enemies.length > healLimit) {
-    return;
-  }
   // if (avoidEnemies(creep)) {
   // return;
   // }
@@ -730,7 +715,7 @@ function doChainLocalMove(creep, moveIndex, firstCreep) {
     var node = creep.memory.path[0];
     var obstacle = getObstacle(node.x, node.y);
     if (!obstacle || obstacle.type == 'creep' && doChainMove(obstacle.creep,
-      moveIndex, firstCreep))
+      moveIndex, firstCreep, creep))
     {
       moveCreep(creep, node.dx, node.dy);
       return null;
@@ -740,21 +725,36 @@ function doChainLocalMove(creep, moveIndex, firstCreep) {
   return creep;
 }
 
-function doChainMove(creep, moveIndex, firstCreep) {
+function doChainMove(creep, moveIndex, firstCreep, prevCreep) {
   if (creep.my && ('path' in creep.memory) && creep.memory.path.length &&
     ('targetPos' in creep.memory))
   {
     if ('moveIndex' in creep) {
       // Circular movement => true
       return (creep.moveIndex == moveIndex && creep == firstCreep);
-    } else if (moveIndex < 1000000 && creep.memory.path[0].dx &&
-      creep.memory.path[0].dy)
-    {
+    } else if (!firstCreep.isDiag && creep.isDiag) {
       // Chain of moves depend on a diagonal movement, save
       // it until all non-diagonal movements have been made.
-      toMoveDiag.push(firstCreep);
+      firstCreep.isDiag = true;
     } else {
       creep.moveIndex = moveIndex;
+      if (prevCreep && prevCreep.memory.isAvoidingEnemy &&
+        !creep.memory.isAvoidingEnemy && prevCreep.memory.path.length > 1)
+      {
+        creep.memory.isAvoidingEnemy = true;
+        creep.memory.path = [];
+        for (var a = 1; a < prevCreep.memory.path.length; a++) {
+          creep.memory.path.push(prevCreep.memory.path[a]);
+        }
+        var node = prevCreep.memory.path[prevCreep.memory.path.length - 1];
+        creep.memory.path.push({
+          'x': node.x + node.dx,
+          'y': node.y + node.dy,
+          'dx': node.dx,
+          'dy': node.dy,
+          'direction': node.direction
+        });
+      }
       var obstacle = doChainLocalMove(creep, moveIndex, firstCreep);
       if (obstacle) {
         // creep.say(Game.time - creep.memory.lastMoveTime);
@@ -769,13 +769,16 @@ function doChainMove(creep, moveIndex, firstCreep) {
             var targetPos = room.getPositionAt(creep.memory.targetPos.x,
               creep.memory.targetPos.y);
             if (targetPos) {
-              creep.memory.path = room.findPath(creep.pos, targetPos, {
+              var path = room.findPath(creep.pos, targetPos, {
                 'ignoreCreeps': !find1,
                 'avoid': obstacles.concat(obstacle[obstacle.type]
                   ).concat(creep.memory.isAvoidingEnemy ? [] : enemyFence)
               });
-              obstacle = doChainLocalMove(creep, moveIndex, firstCreep);
               updateCPU();
+              if (path.length) {
+                creep.memory.path = path;
+                obstacle = doChainLocalMove(creep, moveIndex, firstCreep);
+              }
             }
           }
         }
@@ -790,11 +793,23 @@ function doChainMove(creep, moveIndex, firstCreep) {
   return false;
 }
 
-for (var moveIndex = 0; moveIndex < toMove.length; moveIndex++) {
-  doChainMove(toMove[moveIndex], moveIndex, toMove[moveIndex]);
-}
-for (var moveIndex = 0; moveIndex < toMoveDiag.length; moveIndex++) {
-  doChainMove(toMoveDiag[moveIndex], moveIndex + 1000000, toMoveDiag[moveIndex]);
+var moveIndex = 0;
+var isAvoidingEnemy = true;
+for (var a = 0; a < 2; a++) {
+  var isDiag = false;
+  for (var b = 0; b < 2; b++) {
+    for (var c = 0; c < toMove.length; c++) {
+      moveIndex++;
+      var creep = toMove[c];
+      if (creep.memory && !!creep.memory.isAvoidingEnemy == isAvoidingEnemy &&
+        creep.isDiag == isDiag)
+      {
+        doChainMove(creep, moveIndex, creep);
+      }
+    }
+    isDiag = true;
+  }
+  isAvoidingEnemy = false;
 }
 
 crp.harvester.maxCount = 2;
