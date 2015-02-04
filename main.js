@@ -1,4 +1,4 @@
-var lifeLimit = 30;
+var lifeLimit = 60;
 var lifeLongLimit = 190;
 var grXe = -1;
 var grYe = -1;
@@ -16,8 +16,8 @@ for (var a = 0; a < spawns.length; a++) {
     break;
   }
 }
-var grX = spawn.pos.x - 2;
-var grY = spawn.pos.y - 2;
+var grX = 5; //spawn.pos.x - 2;
+var grY = 39; //spawn.pos.y - 2;
 var structs = room.find(Game.MY_STRUCTURES);
 var targetStructureCount = 9;
 var sources = room.find(Game.SOURCES);
@@ -34,7 +34,7 @@ var freeCarries = [];
 var hasLeftBuilder = false;
 var hasLeftBuilderCarry = false;
 var tooHighCPU = false;
-var enemySafeDistance = 6;
+var enemySafeDistance = 5;
 
 for (var key in Memory.creeps) {
   if (!(key in Game.creeps)) {
@@ -370,16 +370,16 @@ createCrp('harvester', 2, [Game.WORK, Game.WORK, Game.WORK, Game.CARRY, Game.MOV
   // }
   if (creep.harvest(sourceByKey[creep.memory.sourceKey]) < 0) {
     creep.moveTo(sourceByKey[creep.memory.sourceKey]);
-  } else if (creep.pos.y == 36 || (creep.pos.x == 47 && creep.pos.y == 37)) {
-    creep.move(Game.BOTTOM);
-  } else if (creep.pos.x == 2 || creep.pos.x == 3) {
-    creep.move(Game.RIGHT);
-  } else if (creep.pos.x == 47) {
-    creep.move(Game.LEFT);
-  } else if ((creep.pos.x < 9 && creep.pos.y < 8) ||
-    (creep.pos.x < 10 && creep.pos.y < 5))
-  {
-    creep.moveTo(9, 6);
+  // } else if (creep.pos.y == 36 || (creep.pos.x == 47 && creep.pos.y == 37)) {
+    // creep.move(Game.BOTTOM);
+  // } else if (creep.pos.x == 2 || creep.pos.x == 3) {
+    // creep.move(Game.RIGHT);
+  // } else if (creep.pos.x == 47) {
+    // creep.move(Game.LEFT);
+  // } else if ((creep.pos.x < 9 && creep.pos.y < 8) ||
+    // (creep.pos.x < 10 && creep.pos.y < 5))
+  // {
+    // creep.moveTo(9, 6);
   }
   var chosenIndex = -1;
   var minFree = 100000;
@@ -624,6 +624,9 @@ createCrp('healer', 0, [Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.MOV
     // }
     return;
   }
+  if (creep.pos.y > grY + 2) {
+    creep.move(Game.TOP_RIGHT);
+  }
   // if (creep.pos.y - grY < 3 || calculateDistance(spawn.pos, creep.pos) < 3) {
     // creep.moveTo(grX + 2, grY + 3);
   // }
@@ -649,6 +652,9 @@ createCrp('guard', 100, [
       }
     }
   }
+  if (creep.pos.y > grY + 2) {
+    creep.move(Game.TOP_RIGHT);
+  }
   // if (spawn.pos.y > 27) {
     // creep.moveTo(11, 42);
   // }
@@ -667,10 +673,10 @@ for (var i in Game.creeps) {
   }
 }
 
-if (crp.guard.count > 20) {
+if (crp.guard.count > 11) {
   grX--;
 }
-if (crp.guard.count > 22) {
+if (crp.guard.count > 13) {
   grX--;
 }
 
@@ -703,11 +709,11 @@ function moveCreep(creep, dx, dy) {
   }
 }
 
-for (var y = grY; y <= grYe; y++) {
+for (var y = grY; y <= grY + 2; y++) {
   for (var x = grX; x <= grXe; x++) {
     if (!getObstacle(x, y)) {
       var m = getMovable(x + 1, y);
-      if (m && x - grX >= y - grY && (y - grY < 2 || m.memory.role == 'healer')) {
+      if (m && (y - grY < 2 || m.memory.role == 'healer')) {
         moveCreep(m, -1, 0);
       } else {
         m = getMovable(x + 1, y + 1);
