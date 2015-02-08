@@ -3,6 +3,8 @@ var lifeLongLimit = 190;
 var allowLooting = true;
 var tooHighCPU = false;
 var enemySafeDistance = 5;
+var STRAT_JAN = 0;
+var STRAT_FEB = 1;
 var crp = {};
 
 function updateCPU() {
@@ -92,13 +94,17 @@ function getObstacle(x, y) {
 }
 
 function toIndex(pos) {
-  var index = 0;
-  var minDistance = 100000;
-  for (var a = 0; a < sources.length; a++) {
-    var distance = calculateDistance(sources[a].pos, pos);
-    if (distance < minDistance) {
-      index = a;
-      minDistance = distance;
+  if (strat == STRAT_JAN) {
+    var index = pos.x / 18 >> 0;
+  } else {
+    var index = 0;
+    var minDistance = 100000;
+    for (var a = 0; a < sources.length; a++) {
+      var distance = calculateDistance(sources[a].pos, pos);
+      if (distance < minDistance) {
+        index = a;
+        minDistance = distance;
+      }
     }
   }
   return index;
@@ -115,7 +121,9 @@ function addToSourceArea(pos, energy, isCarry) {
 }
 
 function shouldAddCarry(pos) {
-  if (pos.findInRange(Game.SOURCES, 1).length) {
+  if (!spawn) {
+    return false;
+  } else if (pos.findInRange(Game.SOURCES, 1).length) {
     var sourceAreaIndex = toIndex(pos);
     var distanceRate = (calculateDistance(pos, spawn.pos) / 5 >> 0) - 1;
     return (sourceAreas[sourceAreaIndex].energy > -100 * distanceRate ||
@@ -126,7 +134,7 @@ function shouldAddCarry(pos) {
 }
 
 function addToDrops(pos, energy, isCarry) {
-  if (pos.y > 27 != spawn.pos.y > 27) {
+  if (spawn && pos.y > 27 != spawn.pos.y > 27) {
     return;
   }
   var key = pos.x + ' ' + pos.y;
@@ -281,6 +289,12 @@ for (var key in Memory.rooms) {
 
 for (var roomKey in Game.rooms) {
 var room = Game.rooms[roomKey];
+var exitCount = 0;
+exitCount += (room.find(Game.EXIT_TOP).length ? 1 : 0);
+exitCount += (room.find(Game.EXIT_RIGHT).length ? 1 : 0);
+exitCount += (room.find(Game.EXIT_BOTTOM).length ? 1 : 0);
+exitCount += (room.find(Game.EXIT_LEFT).length ? 1 : 0);
+var strat = (exitCount > 1 ? STRAT_FEB : STRAT_JAN);
 var grXe = -1;
 var grYe = -1;
 var roomGrid = room.lookAtArea(0, 0, 49, 49);
@@ -294,8 +308,13 @@ for (var a = 0; a < spawns.length; a++) {
     break;
   }
 }
-var grX = 6; //spawn.pos.x - 2;
-var grY = 38; //spawn.pos.y - 2;
+if (strat == STRAT_JAN) {
+  var grX = 21;
+  var grY = 9;
+} else {
+  var grX = 6;
+  var grY = 38;
+}
 var structs = room.find(Game.MY_STRUCTURES);
 var targetStructureCount = 9;
 var sources = room.find(Game.SOURCES);
@@ -311,24 +330,25 @@ var drops = {};
 var freeCarries = [];
 var hasLeftBuilder = false;
 var hasLeftBuilderCarry = false;
-
-
-// build(3, 41);
-// build(4, 41);
-// build(5, 41);
-// build(46, 42);
-// build(45, 42);
-// build(44, 42);
-// // build(spawn.pos.x, spawn.pos.y + 2);
-// build(spawn.pos.x + 1, spawn.pos.y + 2);
-// build(spawn.pos.x + 2, spawn.pos.y + 2);
-// build(spawn.pos.x + 2, spawn.pos.y + 1);
-// // build(spawn.pos.x + 2, spawn.pos.y);
-// // build(spawn.pos.x, spawn.pos.y + 3, Game.STRUCTURE_SPAWN);
-// build(7, 41, Game.STRUCTURE_SPAWN);
-
 var tmpEnemies = room.find(Game.HOSTILE_CREEPS);
 var enemies = [];
+
+if (strat == STRAT_JAN && spawn) {
+  build(3, 41);
+  build(4, 41);
+  build(5, 41);
+  build(46, 42);
+  build(45, 42);
+  build(44, 42);
+  // build(spawn.pos.x, spawn.pos.y + 2);
+  build(spawn.pos.x + 1, spawn.pos.y + 2);
+  build(spawn.pos.x + 2, spawn.pos.y + 2);
+  build(spawn.pos.x + 2, spawn.pos.y + 1);
+  // build(spawn.pos.x + 2, spawn.pos.y);
+  // build(spawn.pos.x, spawn.pos.y + 3, Game.STRUCTURE_SPAWN);
+  build(7, 41, Game.STRUCTURE_SPAWN);
+}
+
 for (var a = 0; a < tmpEnemies.length; a++) {
   var enemy = tmpEnemies[a];
   enemy.ranged = 0;
@@ -416,7 +436,7 @@ for (var i in Game.creeps) {
     addToGrid(creep);
   } else {
     if (creep.memory.role == 'harvester') {
-      if (creep.ticksToLive > (creep.pos.y > 27 != spawn.pos.y > 27 ?
+      if (creep.ticksToLive > (spawn && creep.pos.y > 27 != spawn.pos.y > 27 ?
         lifeLongLimit : lifeLimit))
       {
         sourceByKey[creep.memory.sourceKey].assCount++;
@@ -430,7 +450,7 @@ for (var i in Game.creeps) {
         if (!('targetPos' in creep.memory)) {
           if (spaceFree) {
             freeCarries.push(creep);
-          } else {
+          } else if (spawn) {
             creep.memory.targetPos = prep4mem(spawn.pos);
           }
         } else if (spaceFree > 0) {
@@ -478,7 +498,7 @@ for (var a = 0; a < freeCarries.length; a++) {
   var freeSpace = creep.energyCapacity - creep.energy
   if (minDistance > 4 && creep.energy) {
     var localSources = creep.pos.findInRange(Game.SOURCES, 4);
-    if (localSources.length == 0 || !localSources[0].energy) {
+    if (spawn && (localSources.length == 0 || !localSources[0].energy)) {
       creep.memory.targetPos = prep4mem(spawn.pos);
     }
   } else if (chosenKey !== '' && (minDistance < 4 || stayPut == false)) {
@@ -498,16 +518,18 @@ createCrp('harvester', 2, [Game.WORK, Game.WORK, Game.WORK, Game.CARRY, Game.MOV
   // }
   if (creep.harvest(sourceByKey[creep.memory.sourceKey]) < 0) {
     creep.moveTo(sourceByKey[creep.memory.sourceKey]);
-  // } else if (creep.pos.y == 36 || (creep.pos.x == 47 && creep.pos.y == 37)) {
-    // creep.move(Game.BOTTOM);
-  // } else if (creep.pos.x == 2 || creep.pos.x == 3) {
-    // creep.move(Game.RIGHT);
-  // } else if (creep.pos.x == 47) {
-    // creep.move(Game.LEFT);
-  // } else if ((creep.pos.x < 9 && creep.pos.y < 8) ||
-    // (creep.pos.x < 10 && creep.pos.y < 5))
-  // {
-    // creep.moveTo(9, 6);
+  } else if (strat == STRAT_JAN) {
+    if (creep.pos.y == 36 || (creep.pos.x == 47 && creep.pos.y == 37)) {
+      creep.move(Game.BOTTOM);
+    } else if (creep.pos.x == 2 || creep.pos.x == 3) {
+      creep.move(Game.RIGHT);
+    } else if (creep.pos.x == 47) {
+      creep.move(Game.LEFT);
+    } else if ((creep.pos.x < 9 && creep.pos.y < 8) ||
+      (creep.pos.x < 10 && creep.pos.y < 5))
+    {
+      creep.moveTo(9, 6);
+    }
   }
   var chosenIndex = -1;
   var minFree = 100000;
@@ -564,6 +586,9 @@ createCrp('builder', 0, [Game.WORK, Game.WORK, Game.CARRY, Game.CARRY, Game.MOVE
 });
 
 createCrp('spawnBuilder', 0, [Game.WORK, Game.WORK, Game.CARRY, Game.CARRY, Game.MOVE], function(creep) {
+  if (!spawn) {
+    return;
+  }
   spawn.transferEnergy(creep);
   var sites = spawn.pos.findInRange(Game.CONSTRUCTION_SITES, 5);
   if (sites.length) {
@@ -584,6 +609,9 @@ createCrp('spawnBuilder', 0, [Game.WORK, Game.WORK, Game.CARRY, Game.CARRY, Game
 });
 
 createCrp('carry', 2, [Game.CARRY, Game.CARRY, Game.CARRY, Game.MOVE, Game.MOVE], function(creep) {
+  if (!spawn) {
+    return;
+  }
   if (creep.hitsMax - creep.hits >= 300) {
     creep.suicide();
     return;
@@ -607,8 +635,8 @@ createCrp('carry', 2, [Game.CARRY, Game.CARRY, Game.CARRY, Game.MOVE, Game.MOVE]
         delete creep.memory.lastMoveTime;
       }
     }
-  // } else if (calculateDistance(spawn.pos, creep.pos) < 4) {
-    // creep.memory.targetPos = createPos(spawn.pos.x, spawn.pos.y + 8);
+  } else if (strat == STRAT_JAN && calculateDistance(spawn.pos, creep.pos) < 4) {
+    creep.memory.targetPos = createPos(spawn.pos.x, spawn.pos.y + 8);
   }
   if ('targetPos' in creep.memory) {
     var targetPos = room.getPositionAt(creep.memory.targetPos.x,
@@ -752,10 +780,12 @@ createCrp('healer', 0, [Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.MOV
     // }
     return;
   }
-  if (creep.pos.y > grY + 4 && creep.pos.x < 9) {
-    creep.move(Game.TOP_RIGHT);
-  } else if (creep.pos.y > grY + 2) {
-    creep.move(Game.TOP);
+  if (strat == STRAT_FEB) {
+    if (creep.pos.y > grY + 4 && creep.pos.x < 9) {
+      creep.move(Game.TOP_RIGHT);
+    } else if (creep.pos.y > grY + 2) {
+      creep.move(Game.TOP);
+    }
   }
   // if (creep.pos.y - grY < 3 || calculateDistance(spawn.pos, creep.pos) < 3) {
     // creep.moveTo(grX + 2, grY + 3);
@@ -782,18 +812,18 @@ createCrp('guard', 100, [
       }
     }
   }
-  if (creep.pos.y > grY + 2) {
+  if (strat == STRAT_FEB && creep.pos.y > grY + 2) {
     creep.move(Game.TOP_RIGHT);
   }
-  // if (spawn.pos.y > 27) {
-    // creep.moveTo(11, 42);
-  // }
+  if (strat == STRAT_JAN && spawn && spawn.pos.y > 27) {
+    creep.moveTo(11, 42);
+  }
 });
 
 for (var i in Game.creeps) {
   var creep = Game.creeps[i];
   var myCrp = crp[typeName];
-  if (creep.ticksToLive > (creep.pos.y > 27 != spawn.pos.y > 27 ?
+  if (creep.ticksToLive > (spawn && creep.pos.y > 27 != spawn.pos.y > 27 ?
     lifeLongLimit : lifeLimit))
   {
     crp[creep.memory.role].count++;
@@ -810,23 +840,25 @@ if (crp.guard.count > 13) {
   grX--;
 }
 
-for (var y = grY; y <= grY + 3; y++) {
+for (var y = grY; y <= (strat == STRAT_JAN ? grYe : grY + 3); y++) {
   for (var x = grX; x <= grXe; x++) {
     if (!getObstacle(x, y)) {
       var m = getMovable(x + 1, y);
-      if (m && (y - grY < 2 || m.memory.role == 'healer')) {
+      if (m && (strat != STRAT_JAN || x - grX >= y - grY) &&
+        (y - grY < 2 || m.memory.role == 'healer'))
+      {
         moveCreep(m, -1, 0);
       } else {
         m = getMovable(x, y + 1);
         if (m && (y - grY > 1 || m.memory.role == 'guard')) {
           moveCreep(m, 0, -1);
-        } else {
-          // m = getMovable(x + 1, y + 1);
-          // if (m && (!getObstacle(x, y + 1) || !getObstacle(x + 1, y)) &&
-            // (y - grY > 1 || m.memory.role == 'guard'))
-          // {
-            // moveCreep(m, -1, -1);
-          // }
+        } else if (strat == STRAT_JAN) {
+          m = getMovable(x + 1, y + 1);
+          if (m && (!getObstacle(x, y + 1) || !getObstacle(x + 1, y)) &&
+            (y - grY > 1 || m.memory.role == 'guard'))
+          {
+            moveCreep(m, -1, -1);
+          }
         }
       }
     }
@@ -852,70 +884,92 @@ for (var a = 0; a < 2; a++) {
   isAvoidingEnemy = false;
 }
 
-crp.harvester.maxCount = 2;
-crp.carry.maxCount = 1;
-if (crp.guard.count > 0) {
-  // crp.harvester.maxCount = 6;
-  // crp.carry.maxCount = 8;
-  crp.healer.maxCount = 1;
-}
-if (crp.guard.count > 1) {
-  // crp.carry.maxCount = 12;
+if (strat == STRAT_JAN) {
+  crp.harvester.maxCount = 2;
+  crp.carry.maxCount = 2;
+  if (crp.guard.count > 0) {
+    crp.harvester.maxCount = 6;
+    crp.carry.maxCount = 8;
+    crp.healer.maxCount = 1;
+  }
+  if (crp.guard.count > 1) {
+    crp.carry.maxCount = 12;
+  } else {
+    crp.guard.body = [Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.TOUGH,
+      Game.TOUGH, Game.MOVE, Game.RANGED_ATTACK, Game.RANGED_ATTACK,
+      Game.RANGED_ATTACK, Game.RANGED_ATTACK];
+  }
+  if (crp.guard.count > 2) {
+    crp.harvester.maxCount = 10;
+  }
+  if (crp.guard.count > 3) {
+    crp.builder.maxCount = Math.max(0, Math.min(2, targetStructureCount -
+      structs.length - 8));
+    crp.builderCarry.maxCount = 2;
+  }
+  if (crp.guard.count > 4) {
+    crp.spawnBuilder.maxCount = 1;
+  }
+  if (crp.guard.count > 6) {
+    crp.healer.maxCount = 4;
+  }
+  if (crp.guard.count > 10) {
+    crp.healer.maxCount = 8;
+  }
+  if (crp.guard.count > 100) {
+    crp.healer.maxCount = 20;
+  }
+  if (spawn && spawn.pos.y > 27) {
+    crp.harvester.maxCount = 4;
+    crp.carry.maxCount = 0;
+    crp.builderCarry.maxCount = 0;
+    crp.healer.maxCount = 0;
+    crp.guard.body = [Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.MOVE];
+  }
+  var extCount = 0;
+  var limit = (spawn && spawn.pos.y > 27 ? 0 : (targetStructureCount > structs.length ?
+    Math.max(2, 5 - Math.max(0, targetStructureCount - structs.length - 10)) : 5));
+  for (var a = 0; a < structs.length && extCount < limit; a++) {
+    if (structs[a].structureType == Game.STRUCTURE_EXTENSION) {
+      extCount++;
+      crp.guard.body.splice(0, 1);
+      crp.guard.body.push(Game.RANGED_ATTACK);
+      crp.healer.body.push(Game.HEAL);
+      if (crp.carry.body.length < 6) {
+        crp.carry.body.push(Game.MOVE);
+        // crp.carry.maxCount = 8;
+      }
+      if (crp.builderCarry.body.length < 6) {
+        crp.builderCarry.body.push(Game.MOVE);
+      }
+    }
+  }
 } else {
-  crp.guard.body = [Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.TOUGH,
-    Game.TOUGH, Game.MOVE, Game.RANGED_ATTACK, Game.RANGED_ATTACK,
-    Game.RANGED_ATTACK, Game.RANGED_ATTACK];
-}
-// if (crp.guard.count > 2) {
-  // crp.harvester.maxCount = 10;
-// }
-// if (crp.guard.count > 3) {
-  // crp.builder.maxCount = Math.max(0, Math.min(2, targetStructureCount -
-    // structs.length - 8));
-  // crp.builderCarry.maxCount = 2;
-// }
-// if (crp.guard.count > 4) {
-  // crp.spawnBuilder.maxCount = 1;
-// }
-if (crp.guard.count > 6) {
-  crp.healer.maxCount = 4;
-}
-if (crp.guard.count > 10) {
-  crp.healer.maxCount = 8;
-}
-if (crp.guard.count > 100) {
-  crp.healer.maxCount = 20;
-}
-// if (spawn.pos.y > 27) {
-  // crp.harvester.maxCount = 4;
-  // crp.carry.maxCount = 0;
-  // crp.builderCarry.maxCount = 0;
-  // crp.healer.maxCount = 0;
-  // crp.guard.body = [Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.MOVE];
-// }
-
-var extCount = 0;
-var limit = (false && spawn.pos.y > 27 ? 0 : (targetStructureCount > structs.length ?
-  Math.max(2, 5 - Math.max(0, targetStructureCount - structs.length - 10)) : 5));
-for (var a = 0; a < structs.length && extCount < limit; a++) {
-  if (structs[a].structureType == Game.STRUCTURE_EXTENSION) {
-    extCount++;
-    crp.guard.body.splice(0, 1);
-    crp.guard.body.push(Game.RANGED_ATTACK);
-    crp.healer.body.push(Game.HEAL);
-    if (crp.carry.body.length < 6) {
-      crp.carry.body.push(Game.MOVE);
-      // crp.carry.maxCount = 8;
-    }
-    if (crp.builderCarry.body.length < 6) {
-      crp.builderCarry.body.push(Game.MOVE);
-    }
+  crp.harvester.maxCount = 2;
+  crp.carry.maxCount = 1;
+  if (crp.guard.count > 0) {
+    crp.healer.maxCount = 1;
+  }
+  if (crp.guard.count > 1) {
+  } else {
+    crp.guard.body = [Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.TOUGH,
+      Game.TOUGH, Game.MOVE, Game.RANGED_ATTACK, Game.RANGED_ATTACK,
+      Game.RANGED_ATTACK, Game.RANGED_ATTACK];
+  }
+  if (crp.guard.count > 6) {
+    crp.healer.maxCount = 4;
+  }
+  if (crp.guard.count > 10) {
+    crp.healer.maxCount = 8;
+  }
+  if (crp.guard.count > 100) {
+    crp.healer.maxCount = 20;
   }
 }
 
 for (var typeName in crp) {
   var myCrp = crp[typeName];
-  if (myCrp.count < myCrp.maxCount) {
+  if (spawn && myCrp.count < myCrp.maxCount) {
     // for(var i in Game.spawns) {
       // var mySpawn = Game.spawns[i];
       var mySpawn = spawn;
