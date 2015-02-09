@@ -2,7 +2,7 @@ var lifeLimit = 60;
 var lifeLongLimit = 190;
 var allowLooting = true;
 var tooHighCPU = false;
-var enemySafeDistance = 5;
+var enemySafeDistance = 6;
 var STRAT_JAN = 0;
 var STRAT_FEB = 1;
 var crp = {};
@@ -60,9 +60,12 @@ function addToToMove(creep) {
 function avoidEnemies(creep) {
   var enemy = creep.pos.findInRange(Game.HOSTILE_CREEPS, enemySafeDistance);
   if (enemy.length) {
-    delete creep.memory.targetPos;
-    creep.memory.targetPos = createPos(creep.pos.x - (enemy[0].pos.x -
-      creep.pos.x), creep.pos.y - (enemy[0].pos.y - creep.pos.y));
+    // if (strat == STRAT_FEB) {
+      // creep.memory.targetPos = createPos(3, 44);
+    // } else {
+      creep.memory.targetPos = createPos(creep.pos.x - (enemy[0].pos.x -
+        creep.pos.x), creep.pos.y - (enemy[0].pos.y - creep.pos.y));
+    // }
     creep.memory.isAvoidingEnemy = true;
   }
   if (creep.memory.targetPos && creep.memory.isAvoidingEnemy) {
@@ -73,6 +76,33 @@ function avoidEnemies(creep) {
     }
   }
   return false;
+}
+
+function handleTargetPos(creep) {
+  if ('targetPos' in creep.memory) {
+    var targetPos = room.getPositionAt(creep.memory.targetPos.x,
+      creep.memory.targetPos.y);
+    if (targetPos && (!('path' in creep.memory) || !targetPos.equalsTo(
+      creep.memory.path[creep.memory.path.length - 1]) ||
+      calculateDistance(creep.pos, creep.memory.path[0]) > 1))
+    {
+      if (!tooHighCPU) {
+        creep.memory.path = room.findPath(creep.pos, targetPos, {
+          'ignoreCreeps': true,
+          'avoid': obstacles.concat(creep.memory.isAvoidingEnemy ? [] : enemyFence)
+        });
+        updateCPU();
+      }
+    } else if (creep.pos.equalsTo(creep.memory.path[0])) {
+      creep.memory.lastMoveTime = Game.time;
+      if (creep.memory.path.length == 1) {
+        delete creep.memory.path;
+      } else {
+        creep.memory.path.splice(0, 1);
+      }
+    }
+    addToToMove(creep);
+  }
 }
 
 function build(x, y, type) {
@@ -125,8 +155,9 @@ function shouldAddCarry(pos) {
     return false;
   } else if (pos.findInRange(Game.SOURCES, 1).length) {
     var sourceAreaIndex = toIndex(pos);
-    var distanceRate = (calculateDistance(pos, spawn.pos) / 5 >> 0) - 1;
-    return (sourceAreas[sourceAreaIndex].energy > -100 * distanceRate ||
+    var distanceRate = Math.max(1, (calculateDistance(pos, spawn.pos) /
+      5 >> 0) - 1);
+    return (sourceAreas[sourceAreaIndex].energy > -100 * (distanceRate - 1) ||
       sourceAreas[sourceAreaIndex].carries < distanceRate);
   } else {
     return true;
@@ -134,10 +165,10 @@ function shouldAddCarry(pos) {
 }
 
 function addToDrops(pos, energy, isCarry) {
-  if (spawn && pos.y > 27 != spawn.pos.y > 27) {
+  if (strat == STRAT_JAN && spawn && pos.y > 27 != spawn.pos.y > 27) {
     return;
   }
-  var key = pos.x + ' ' + pos.y;
+  var key = pos2key(pos);
   if (key in drops) {
     drops[key] += energy;
   } else if (!isCarry) {
@@ -149,6 +180,10 @@ function addToDrops(pos, energy, isCarry) {
 
 function posFromKey(key) {
   return room.getPositionAt(parseInt(key), parseInt(key.substr(2)));
+}
+
+function pos2key(pos) {
+  return pos.x + ' ' + pos.y;
 }
 
 function addToGrid(obj) {
@@ -274,6 +309,8 @@ function doChainMove(creep, moveIndex, firstCreep, prevCreep) {
 }
 
 // #############################################################
+
+// console.log('#######################################');
 
 for (var key in Memory.creeps) {
   if (!(key in Game.creeps)) {
@@ -411,6 +448,9 @@ if (enemies.length) {
 
 for (var i in Game.creeps) {
   var creep = Game.creeps[i];
+  if (creep.spawning) {
+    continue;
+  }
   if (creep.hits < creep.hitsMax) {
     var damage = creep.hitsMax - creep.hits;
     if (damage < 200) {
@@ -430,9 +470,7 @@ for (var i in Game.creeps) {
   if (creep.memory.role != 'carry') {
     addToObstacles(creep);
   }
-  if ((creep.memory.role == 'guard' || creep.memory.role == 'healer') &&
-    !creep.spawning)
-  {
+  if (creep.memory.role == 'guard' || creep.memory.role == 'healer') {
     addToGrid(creep);
   } else {
     if (creep.memory.role == 'harvester') {
@@ -443,19 +481,6 @@ for (var i in Game.creeps) {
       }
       if (creep.energy) {
         addToDrops(creep.pos, creep.energy, false);
-      }
-    } else if (creep.memory.role == 'carry') {
-      if (!('safePos' in creep.memory)) {
-        var spaceFree = creep.energyCapacity - creep.energy;
-        if (!('targetPos' in creep.memory)) {
-          if (spaceFree) {
-            freeCarries.push(creep);
-          } else if (spawn) {
-            creep.memory.targetPos = prep4mem(spawn.pos);
-          }
-        } else if (spaceFree > 0) {
-          addToDrops(creep.memory.targetPos, -spaceFree, true);
-        }
       }
     } else if (creep.memory.role == 'builder') {
       if (creep.ticksToLive > lifeLongLimit && creep.memory.workCenter.x < 27) {
@@ -471,51 +496,75 @@ for (var i in Game.creeps) {
 
 var drops2 = room.find(Game.DROPPED_ENERGY);
 for (var a = 0; a < drops2.length; a++) {
-  if ((allowLooting && enemies.length == 0) || !(drops2[a].pos.x > 16 &&
-    drops2[a].pos.x < 30 && drops2[a].pos.y < 9))
+  if (strat == STRAT_FEB || (allowLooting && enemies.length == 0) ||
+    !(drops2[a].pos.x > 16 && drops2[a].pos.x < 30 && drops2[a].pos.y < 9))
   {
     addToDrops(drops2[a].pos, drops2[a].energy, false);
   }
 }
+
+for (var i in Game.creeps) {
+  var creep = Game.creeps[i];
+  if (creep.spawning || creep.memory.role != 'carry') {
+    continue;
+  }
+  if ('safePos' in creep.memory) {
+    delete creep.memory.targetDrop;
+  } else {
+    var spaceFree = creep.energyCapacity - creep.energy;
+    if (spaceFree) {
+      if ('targetDrop' in creep.memory) {
+        if (drops[pos2key(creep.memory.targetDrop)] > 0) {
+          creep.memory.targetPos = creep.memory.targetDrop;
+        } else {
+          delete creep.memory.targetPos;
+          delete creep.memory.targetDrop;
+        }
+      }
+      if (!('targetDrop' in creep.memory)) {
+        freeCarries.push(creep);
+      } else {
+        addToDrops(creep.memory.targetDrop, -spaceFree, true);
+      }
+    } else {
+      delete creep.memory.targetDrop;
+    }
+  }
+}
+
 for (var a = 0; a < freeCarries.length; a++) {
   var creep = freeCarries[a];
+  var freeSpace = creep.energyCapacity - creep.energy
   var chosenKey = '';
   var minDistance = 100000;
-  var stayPut = false;
   for (var key in drops) {
     var pos = posFromKey(key);
     var distance = calculateDistance(creep.pos, pos);
-    if (distance < 2) {
-      stayPut = true;
+    if (drops[key] < freeSpace) {
+      distance += 3;
     }
-    if (distance < minDistance && distance > 1 &&
-      (distance < 4 || shouldAddCarry(pos)))
+    if (distance < minDistance && (distance < 2 && creep.energy ||
+      shouldAddCarry(pos)))
     {
       minDistance = distance;
       chosenKey = key;
     }
   }
-  var freeSpace = creep.energyCapacity - creep.energy
   if (minDistance > 4 && creep.energy) {
-    var localSources = creep.pos.findInRange(Game.SOURCES, 4);
-    if (spawn && (localSources.length == 0 || !localSources[0].energy)) {
-      creep.memory.targetPos = prep4mem(spawn.pos);
-    }
-  } else if (chosenKey !== '' && (minDistance < 4 || stayPut == false)) {
-    // creep.say(chosenKey);
+    creep.memory.targetPos = prep4mem(spawn.pos);
+  } else if (chosenKey !== '') {
     var targetPos = posFromKey(chosenKey);
-    creep.memory.targetPos = prep4mem(targetPos);
+    creep.memory.targetDrop = creep.memory.targetPos = prep4mem(targetPos);
     drops[chosenKey] -= freeSpace;
     addToSourceArea(targetPos, -freeSpace, true);
-  } else if (stayPut) {
-    addToSourceArea(creep.pos, -freeSpace, true);
   }
 }
 
 createCrp('harvester', 2, [Game.WORK, Game.WORK, Game.WORK, Game.CARRY, Game.MOVE], function(creep) {
-  // if (avoidEnemies(creep)) {
-    // return;
-  // }
+  if (avoidEnemies(creep)) {
+    handleTargetPos(creep);
+    return;
+  }
   if (creep.harvest(sourceByKey[creep.memory.sourceKey]) < 0) {
     creep.moveTo(sourceByKey[creep.memory.sourceKey]);
   } else if (strat == STRAT_JAN) {
@@ -638,34 +687,11 @@ createCrp('carry', 2, [Game.CARRY, Game.CARRY, Game.CARRY, Game.MOVE, Game.MOVE]
   } else if (strat == STRAT_JAN && calculateDistance(spawn.pos, creep.pos) < 4) {
     creep.memory.targetPos = createPos(spawn.pos.x, spawn.pos.y + 8);
   }
-  if ('targetPos' in creep.memory) {
-    var targetPos = room.getPositionAt(creep.memory.targetPos.x,
-      creep.memory.targetPos.y);
-    if (targetPos && (!('path' in creep.memory) || !targetPos.equalsTo(
-      creep.memory.path[creep.memory.path.length - 1]) ||
-      calculateDistance(creep.pos, creep.memory.path[0]) > 1))
-    {
-      if (!tooHighCPU) {
-        creep.memory.path = room.findPath(creep.pos, targetPos, {
-          'ignoreCreeps': true,
-          'avoid': obstacles.concat(creep.memory.isAvoidingEnemy ? [] : enemyFence)
-        });
-        updateCPU();
-      }
-    } else if (creep.pos.equalsTo(creep.memory.path[0])) {
-      creep.memory.lastMoveTime = Game.time;
-      if (creep.memory.path.length == 1) {
-        delete creep.memory.path;
-      } else {
-        creep.memory.path.splice(0, 1);
-      }
-    }
-    addToToMove(creep);
-  }
+  handleTargetPos(creep);
   if (creep.energy < creep.energyCapacity) {
     var localDrops = creep.pos.findInRange(Game.DROPPED_ENERGY, 1);
-    if (localDrops.length) {
-      creep.pickup(localDrops[0]);
+    for (var a = 0; a < localDrops.length; a++) {
+      creep.pickup(localDrops[a]);
     }
   }
 });
@@ -945,9 +971,12 @@ if (strat == STRAT_JAN) {
     }
   }
 } else {
+  crp.carry.body = [Game.CARRY, Game.CARRY, Game.MOVE, Game.MOVE];
   crp.harvester.maxCount = 2;
   crp.carry.maxCount = 1;
   if (crp.guard.count > 0) {
+    crp.harvester.maxCount = 4;
+    crp.carry.maxCount = 5;
     crp.healer.maxCount = 1;
   }
   if (crp.guard.count > 1) {
@@ -980,6 +1009,11 @@ for (var typeName in crp) {
           var chosenIndex = -1;
           var chosenBottom = -1;
           for (var sourceIndex = 0; sourceIndex < sources.length; sourceIndex++) {
+            if (strat == STRAT_FEB && sources[sourceIndex].pos.y != 47 &&
+              sources[sourceIndex].pos.y != 2)
+            {
+              continue;
+            }
             var distance = calculateDistance(mySpawn.pos, sources[sourceIndex].pos);
             if (sources[sourceIndex].assCount < 2 && distance < minDistance) {
               if (sources[sourceIndex].pos.y > 27 != spawn.pos.y > 27) {
@@ -991,6 +1025,9 @@ for (var typeName in crp) {
             }
           }
           mem.sourceKey = sources[chosenIndex >= 0 ? chosenIndex : chosenBottom].id;
+          if (strat == STRAT_FEB && chosenIndex < 0 && chosenBottom >= 0) {
+            myCrp.body = [Game.WORK, Game.WORK, Game.MOVE, Game.MOVE];
+          }
         } else if (myCrp.typeName == 'builder') {
           mem.workCenter = createPos((hasLeftBuilder ? 46 : 3), 37);
           mem.targetConstruction = null;
