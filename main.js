@@ -111,6 +111,9 @@ function build(x, y, type) {
 }
 
 function getObstacle(x, y) {
+  if (x < 0 || x > 49 || y < 0 || y > 49) {
+    return {'type': 'terrain', 'terrain': 'wall'};
+  }
   var o = roomGrid[y][x];
   for (var a = 0; a < o.length; a++) {
     if (o[a].type == 'creep' || (o[a].type == 'terrain' &&
@@ -168,13 +171,33 @@ function addToDrops(pos, energy, isCarry) {
   if (strat == STRAT_JAN && spawn && pos.y > 27 != spawn.pos.y > 27) {
     return;
   }
+  if (!isCarry) {
+    var pos2 = {}
+    for (var y = -1; y < 2; y++) {
+      for (var x = -1; x < 2; x++) {
+        pos2.x = pos.x + x;
+        pos2.y = pos.y + y;
+        var obstacle = getObstacle(pos2.x, pos2.y);
+        if (!obstacle || (obstacle.type == 'creep' && obstacle.creep.my &&
+          obstacle.creep.memory.role == 'carry'))
+        {
+          var key = pos2key(pos2);
+          if (key in dropsArea) {
+            dropsArea[key] += energy;
+          } else {
+            dropsArea[key] = energy;
+          }
+        }
+      }
+    }
+  }
+
   var key = pos2key(pos);
   if (key in drops) {
     drops[key] += energy;
   } else if (!isCarry) {
     drops[key] = energy;
   }
-
   addToSourceArea(pos, energy, isCarry);
 }
 
@@ -364,6 +387,7 @@ for (var a = 0; a < sources.length; a++) {
 }
 var healTargets = [];
 var drops = {};
+var dropsArea = {};
 var freeCarries = [];
 var hasLeftBuilder = false;
 var hasLeftBuilderCarry = false;
@@ -514,10 +538,14 @@ for (var i in Game.creeps) {
     var spaceFree = creep.energyCapacity - creep.energy;
     if (spaceFree) {
       if ('targetDrop' in creep.memory) {
-        if (drops[pos2key(creep.memory.targetDrop)] > 0) {
+        var obstacle = getObstacle(creep.memory.targetDrop.x,
+          creep.memory.targetDrop.y);
+        if ((obstacle && obstacle.creep && obstacle.creep.my &&
+          obstacle.creep.memory.role == 'harvester') ||
+          dropsArea[pos2key(creep.memory.targetDrop)] > 0)
+        {
           creep.memory.targetPos = creep.memory.targetDrop;
         } else {
-          delete creep.memory.targetPos;
           delete creep.memory.targetDrop;
         }
       }
@@ -555,8 +583,7 @@ for (var a = 0; a < freeCarries.length; a++) {
   } else if (chosenKey !== '') {
     var targetPos = posFromKey(chosenKey);
     creep.memory.targetDrop = creep.memory.targetPos = prep4mem(targetPos);
-    drops[chosenKey] -= freeSpace;
-    addToSourceArea(targetPos, -freeSpace, true);
+    addToDrops(targetPos, -freeSpace, true);
   }
 }
 
@@ -689,6 +716,27 @@ createCrp('carry', 2, [Game.CARRY, Game.CARRY, Game.CARRY, Game.MOVE, Game.MOVE]
   }
   handleTargetPos(creep);
   if (creep.energy < creep.energyCapacity) {
+    if (!('targetPos' in creep.memory)) {
+      var maxEnergy = 0;
+      var pos = {};
+      var bestPos = prep4mem(creep.pos);
+      for (var y = -1; y < 2; y++) {
+        for (var x = -1; x < 2; x++) {
+          pos.x = creep.pos.x + x;
+          pos.y = creep.pos.y + y;
+          var key = pos2key(pos);
+          if (key in dropsArea && dropsArea[key] > maxEnergy) {
+            maxEnergy = dropsArea[key];
+            bestPos = prep4mem(pos);
+          }
+        }
+      }
+      var key = pos2key(creep.pos);
+      if (maxEnergy > ((key in dropsArea) ? dropsArea[key] : 0)) {
+        creep.move(creep.pos.getDirectionTo(bestPos));
+        creep.memory.targetDrop = bestPos;
+      }
+    }
     var localDrops = creep.pos.findInRange(Game.DROPPED_ENERGY, 1);
     for (var a = 0; a < localDrops.length; a++) {
       creep.pickup(localDrops[a]);
