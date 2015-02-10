@@ -2,7 +2,6 @@ var lifeLimit = 60;
 var lifeLongLimit = 190;
 var allowLooting = true;
 var tooHighCPU = false;
-var enemySafeDistance = 6;
 var STRAT_JAN = 0;
 var STRAT_FEB = 1;
 var crp = {};
@@ -52,29 +51,108 @@ function addToToMove(creep) {
     creep.isDiag = (creep.memory.path[0].dx != 0 && creep.memory.path[0].dy != 0);
     toMove.push(creep);
   } else {
-    creep.memory.isAvoidingEnemy = false;
+    delete creep.memory.isAvoidingEnemy;
     delete creep.memory.targetPos;
   }
 }
 
-function avoidEnemies(creep) {
-  var enemy = creep.pos.findInRange(Game.HOSTILE_CREEPS, enemySafeDistance);
-  if (enemy.length) {
-    // if (strat == STRAT_FEB) {
-      // creep.memory.targetPos = createPos(3, 44);
-    // } else {
-      creep.memory.targetPos = createPos(creep.pos.x - (enemy[0].pos.x -
-        creep.pos.x), creep.pos.y - (enemy[0].pos.y - creep.pos.y));
-    // }
-    creep.memory.isAvoidingEnemy = true;
-  }
-  if (creep.memory.targetPos && creep.memory.isAvoidingEnemy) {
-    if (calculateDistance(creep.pos, creep.memory.targetPos) < 2) {
-      delete creep.memory.isAvoidingEnemy;
+function rotLeft(obj, creep) {
+  while (obj.count < 5) {
+    obj.count++;
+    if (obj.dx == -1 && obj.dy < 1) {
+      obj.dy++;
+    } else if (obj.dy == 1 && obj.dx < 1) {
+      obj.dx++;
+    } else if (obj.dx == 1 && obj.dy > -1) {
+      obj.dy--;
     } else {
-      return true;
+      obj.dx--;
+    }
+    if (isNonCombat(getObstacle(creep.pos.x + obj.dx, creep.pos.y + obj.dy))) {
+      break;
     }
   }
+}
+
+function rotRight(obj, creep) {
+  while (obj.count < 5) {
+    obj.count++;
+    if (obj.dx == -1 && obj.dy > -1) {
+      obj.dy--;
+    } else if (obj.dy == 1 && obj.dx > -1) {
+      obj.dx--;
+    } else if (obj.dx == 1 && obj.dy < 1) {
+      obj.dy++;
+    } else {
+      obj.dx++;
+    }
+    if (isNonCombat(getObstacle(creep.pos.x + obj.dx, creep.pos.y + obj.dy))) {
+      break;
+    }
+  }
+}
+
+function avoidEnemies(creep) {
+  var enemy = null;
+  var minDistance = 100000;
+  var localEnemies = creep.pos.findInRange(Game.HOSTILE_CREEPS,
+    enemySafeDistance + (creep.memory.isAvoidingEnemy ? 2 : 0));
+  for (var a = 0; a < localEnemies.length; a++) {
+    var distance = calculateDistance(localEnemies[a].pos, creep.pos);
+    if (distance < minDistance) {
+      minDistance = distance;
+      enemy = localEnemies[a];
+    }
+  }
+  if (enemy) {
+    var dx = (creep.pos.x == enemy.pos.x ? 0 :
+      (creep.pos.x - enemy.pos.x < 0 ? -1 : 1));
+    var dy = (creep.pos.y == enemy.pos.y ? 0 :
+      (creep.pos.y - enemy.pos.y < 0 ? -1 : 1));
+    if (isNonCombat(getObstacle(creep.pos.x + dx, creep.pos.y + dy))) {
+      creep.memory.isAvoidingEnemy = 'left';
+    } else {
+      var rotObjLeft = {'dx': dx, 'dy': dy, 'count': 0};
+      var rotObjRight = {'dx': dx, 'dy': dy, 'count': 0};
+      if (creep.memory.isAvoidingEnemy == 'left') {
+        rotLeft(rotObjLeft, creep);
+        if (rotObjLeft.count > 3) {
+          rotRight(rotObjRight, creep);
+        } else {
+          rotObjRight.count = 5;
+        }
+      } else if (creep.memory.isAvoidingEnemy == 'right') {
+        rotRight(rotObjRight, creep);
+        if (rotObjRight.count > 3) {
+          rotLeft(rotObjLeft, creep);
+        } else {
+          rotObjLeft.count = 5;
+        }
+      } else {
+        rotLeft(rotObjLeft, creep);
+        rotRight(rotObjRight, creep);
+      }
+      if (rotObjLeft.count < rotObjRight.count) {
+        dx = rotObjLeft.dx;
+        dy = rotObjLeft.dy;
+        creep.memory.isAvoidingEnemy = 'left';
+      } else {
+        dx = rotObjRight.dx;
+        dy = rotObjRight.dy;
+        creep.memory.isAvoidingEnemy = 'right';
+      }
+    }
+    creep.memory.targetPos = createPos(creep.pos.x + dx, creep.pos.y + dy);
+    creep.memory.path = [{
+      'x': creep.memory.targetPos.x,
+      'y': creep.memory.targetPos.y,
+      'dx': dx,
+      'dy': dy,
+      'direction': creep.pos.getDirectionTo(creep.memory.targetPos)
+    }];
+    return true;
+  }
+  delete creep.memory.isAvoidingEnemy;
   return false;
 }
 
@@ -221,6 +299,12 @@ function getMovable(x, y) {
     c.memory.role == 'guard') && !c.fatigue) ? c : null;
 }
 
+function isNonCombat(obstacle) {
+  return !obstacle; //|| (obstacle.type == 'creep' &&
+    // obstacle.creep.my && (obstacle.creep.memory.role == 'carry' ||
+    // obstacle.creep.memory.role == 'harvester')));
+}
+
 function updateRoomGrid(creep, x, y, dx, dy) {
   var arr = roomGrid[y][x];
   for (var a = 0; a < arr.length; a++) {
@@ -261,7 +345,7 @@ function doChainLocalMove(creep, moveIndex, firstCreep) {
 function doChainMove(creep, moveIndex, firstCreep, prevCreep) {
   if (creep.my && ('targetPos' in creep.memory)) {
     if (!('path' in creep.memory) || !creep.memory.path.length) {
-      creep.memory.isAvoidingEnemy = false;
+      delete creep.memory.isAvoidingEnemy;
       delete creep.memory.targetPos;
     } else if ('moveIndex' in creep) {
       // Circular movement => true
@@ -275,7 +359,7 @@ function doChainMove(creep, moveIndex, firstCreep, prevCreep) {
       if (prevCreep && prevCreep.memory.isAvoidingEnemy &&
         !creep.memory.isAvoidingEnemy && prevCreep.memory.path.length > 1)
       {
-        creep.memory.isAvoidingEnemy = true;
+        creep.memory.isAvoidingEnemy = prevCreep.memory.isAvoidingEnemy;
         creep.memory.path = [];
         for (var a = 1; a < prevCreep.memory.path.length; a++) {
           creep.memory.path.push(prevCreep.memory.path[a]);
@@ -295,7 +379,7 @@ function doChainMove(creep, moveIndex, firstCreep, prevCreep) {
         if (!obstacle.creep || !obstacle.creep.my ||
           !obstacle.creep.memory || obstacle.creep.memory.role != 'carry')
         {
-          creep.memory.isAvoidingEnemy = false;
+          delete creep.memory.isAvoidingEnemy;
           delete creep.memory.path;
           delete creep.memory.targetPos;
         } else if (!creep.memory.lastMoveTime) {
@@ -371,9 +455,11 @@ for (var a = 0; a < spawns.length; a++) {
 if (strat == STRAT_JAN) {
   var grX = 21;
   var grY = 9;
+  var enemySafeDistance = 6;
 } else {
   var grX = 6;
   var grY = 38;
+  var enemySafeDistance = 9;
 }
 var structs = room.find(Game.MY_STRUCTURES);
 var targetStructureCount = 9;
@@ -532,7 +618,7 @@ for (var i in Game.creeps) {
   if (creep.spawning || creep.memory.role != 'carry') {
     continue;
   }
-  if ('safePos' in creep.memory) {
+  if (creep.memory.isAvoidingEnemy) {
     delete creep.memory.targetDrop;
   } else {
     var spaceFree = creep.energyCapacity - creep.energy;
