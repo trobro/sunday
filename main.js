@@ -588,7 +588,7 @@ for (var a = 0; a < freeCarries.length; a++) {
 }
 
 createCrp('harvester', 2, [Game.WORK, Game.WORK, Game.WORK, Game.CARRY, Game.MOVE], function(creep) {
-  if (avoidEnemies(creep)) {
+  if (strat == STRAT_FEB && avoidEnemies(creep)) {
     handleTargetPos(creep);
     return;
   }
