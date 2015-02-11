@@ -8,7 +8,7 @@ var STRAT_FEB2 = 2;
 var crp = {};
 var minDrop = 100;
 
-var creepName = 'Landon';
+var creepName = 'Colton';
 function log(creep, text) {
   if (creep.name == creepName) {
     console.log(text);
@@ -597,6 +597,12 @@ if (strat == STRAT_JAN && spawn) {
   build(19, 31, Game.STRUCTURE_WALL);
   build(31, 21, Game.STRUCTURE_WALL);
 }
+var sites = room.find(Game.CONSTRUCTION_SITES);
+for (var a = 0; a < sites.length; a++) {
+  if (sites[a].progress) {
+    addToObstacles(sites[a]);
+  }
+}
 
 for (var a = 0; a < tmpEnemies.length; a++) {
   var enemy = tmpEnemies[a];
@@ -953,9 +959,6 @@ createCrp('carry', 2, [Game.CARRY, Game.CARRY, Game.CARRY, Game.MOVE, Game.MOVE]
     }
     var localDrops = creep.pos.findInRange(Game.DROPPED_ENERGY, 1);
     for (var a = 0; a < localDrops.length; a++) {
-      // if (creep.memory.targetPos) {
-        // log(creep, creep.memory.targetPos.x + ' ' + creep.memory.targetPos.y);
-      // }
       creep.pickup(localDrops[a]);
     }
   }
