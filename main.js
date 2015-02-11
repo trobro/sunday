@@ -5,6 +5,14 @@ var tooHighCPU = false;
 var STRAT_JAN = 0;
 var STRAT_FEB = 1;
 var crp = {};
+var minDrop = 100;
+
+var creepName = 'Kennedy';
+function log(creep, text) {
+  if (creep.name == creepName) {
+    console.log(text);
+  }
+}
 
 function updateCPU() {
   Game.getUsedCpu(function(cpu) {
@@ -56,43 +64,94 @@ function addToToMove(creep) {
   }
 }
 
+function rotLeft2(obj, creep) {
+  if (obj.dx == -1 && obj.dy < 1) {
+    obj.dy++;
+  } else if (obj.dy == 1 && obj.dx < 1) {
+    obj.dx++;
+  } else if (obj.dx == 1 && obj.dy > -1) {
+    obj.dy--;
+  } else {
+    obj.dx--;
+  }
+  return isNonCombat(getObstacle(creep.pos.x + obj.dx,
+      creep.pos.y + obj.dy, obj.avoidSwamp));
+}
+
 function rotLeft(obj, creep) {
   while (obj.count < 5) {
     obj.count++;
-    if (obj.dx == -1 && obj.dy < 1) {
-      obj.dy++;
-    } else if (obj.dy == 1 && obj.dx < 1) {
-      obj.dx++;
-    } else if (obj.dx == 1 && obj.dy > -1) {
-      obj.dy--;
-    } else {
-      obj.dx--;
-    }
-    if (isNonCombat(getObstacle(creep.pos.x + obj.dx,
-      creep.pos.y + obj.dy, true)))
-    {
-      break;
+    if (rotLeft2(obj, creep)) {
+      // Cannot move diagonally if blocked on both sides.
+      if (obj.dx != 0 && obj.dy != 0) {
+        obj2 = {'dx': obj.dx, 'dy': obj.dy};
+        if (rotLeft2(obj2, creep)) {
+          break;
+        }
+      } else {
+        break;
+      }
     }
   }
+}
+
+function rotRight2(obj, creep) {
+  if (obj.dx == -1 && obj.dy > -1) {
+    obj.dy--;
+  } else if (obj.dy == 1 && obj.dx > -1) {
+    obj.dx--;
+  } else if (obj.dx == 1 && obj.dy < 1) {
+    obj.dy++;
+  } else {
+    obj.dx++;
+  }
+  return isNonCombat(getObstacle(creep.pos.x + obj.dx,
+    creep.pos.y + obj.dy, obj.avoidSwamp));
 }
 
 function rotRight(obj, creep) {
   while (obj.count < 5) {
     obj.count++;
-    if (obj.dx == -1 && obj.dy > -1) {
-      obj.dy--;
-    } else if (obj.dy == 1 && obj.dx > -1) {
-      obj.dx--;
-    } else if (obj.dx == 1 && obj.dy < 1) {
-      obj.dy++;
+    if (rotRight2(obj, creep)) {
+      // Cannot move diagonally if blocked on both sides.
+      if (obj.dx != 0 && obj.dy != 0) {
+        obj2 = {'dx': obj.dx, 'dy': obj.dy};
+        if (rotRight2(obj2, creep)) {
+          break;
+        }
+      } else {
+        break;
+      }
+    }
+  }
+}
+
+function doBestRot(obj, creep, rotObjLeft, rotObjRight, avoidSwamp) {
+  rotObjLeft.dx = obj.dx;
+  rotObjLeft.dy = obj.dy;
+  rotObjLeft.count = 0;
+  rotObjLeft.avoidSwamp = avoidSwamp;
+  rotObjRight.dx = obj.dx;
+  rotObjRight.dy = obj.dy;
+  rotObjRight.count = 0;
+  rotObjRight.avoidSwamp = avoidSwamp;
+  if (obj.rot == 'left') {
+    rotLeft(rotObjLeft, creep);
+    if (rotObjLeft.count > 4) {
+      rotRight(rotObjRight, creep);
     } else {
-      obj.dx++;
+      rotObjRight.count = 5;
     }
-    if (isNonCombat(getObstacle(creep.pos.x + obj.dx,
-      creep.pos.y + obj.dy, true)))
-    {
-      break;
+  } else if (obj.rot == 'right') {
+    rotRight(rotObjRight, creep);
+    if (rotObjRight.count > 4) {
+      rotLeft(rotObjLeft, creep);
+    } else {
+      rotObjLeft.count = 5;
     }
+  } else {
+    rotLeft(rotObjLeft, creep);
+    rotRight(rotObjRight, creep);
   }
 }
 
@@ -102,25 +161,11 @@ function moveDirection(obj, creep) {
   {
     obj.rot = 'left';
   } else {
-    var rotObjLeft = {'dx': obj.dx, 'dy': obj.dy, 'count': 0};
-    var rotObjRight = {'dx': obj.dx, 'dy': obj.dy, 'count': 0};
-    if (obj.rot == 'left') {
-      rotLeft(rotObjLeft, creep);
-      if (rotObjLeft.count > 3) {
-        rotRight(rotObjRight, creep);
-      } else {
-        rotObjRight.count = 5;
-      }
-    } else if (obj.rot == 'right') {
-      rotRight(rotObjRight, creep);
-      if (rotObjRight.count > 3) {
-        rotLeft(rotObjLeft, creep);
-      } else {
-        rotObjLeft.count = 5;
-      }
-    } else {
-      rotLeft(rotObjLeft, creep);
-      rotRight(rotObjRight, creep);
+    var rotObjLeft = {};
+    var rotObjRight = {};
+    doBestRot(obj, creep, rotObjLeft, rotObjRight, true);
+    if (rotObjLeft.count > 2 && rotObjRight.count > 2) {
+      doBestRot(obj, creep, rotObjLeft, rotObjRight, false);
     }
     if (rotObjLeft.count < rotObjRight.count) {
       obj.dx = rotObjLeft.dx;
@@ -218,7 +263,8 @@ function getObstacle(x, y, avoidSwamp) {
     if (o[a].type == 'creep' || (o[a].type == 'terrain' &&
       o[a].terrain == 'wall') || (o[a].type == 'structure' &&
       !(o[a].structure.structureType == 'rampart' && o[a].structure.my)) ||
-      (avoidSwamp && o[a].terrain == 'swamp'))
+      (avoidSwamp && o[a].terrain == 'swamp') ||
+      (o[a].type == 'constructionSite' && o[a].constructionSite.progress))
     {
       return o[a];
     }
@@ -322,9 +368,8 @@ function getMovable(x, y) {
 }
 
 function isNonCombat(obstacle) {
-  return !obstacle; //|| (obstacle.type == 'creep' &&
-    // obstacle.creep.my && (obstacle.creep.memory.role == 'carry' ||
-    // obstacle.creep.memory.role == 'harvester')));
+  return !obstacle; // || (obstacle.type == 'creep' &&
+    //obstacle.creep.my && obstacle.creep.memory.path));
 }
 
 function updateRoomGrid(creep, x, y, dx, dy) {
@@ -482,8 +527,8 @@ if (strat == STRAT_JAN) {
 } else {
   var grX = 6;
   var grY = 38;
-  var enemySafeDistance = 9;
-  var healPos = createPos(16, 21);
+  var enemySafeDistance = 5;
+  var healPos = createPos(34, 34);
 }
 var structs = room.find(Game.MY_STRUCTURES);
 var targetStructureCount = 9;
@@ -634,8 +679,9 @@ for (var i in Game.creeps) {
 
 var drops2 = room.find(Game.DROPPED_ENERGY);
 for (var a = 0; a < drops2.length; a++) {
-  if (strat == STRAT_FEB || (allowLooting && enemies.length == 0) ||
-    !(drops2[a].pos.x > 16 && drops2[a].pos.x < 30 && drops2[a].pos.y < 9))
+  if (drops2[a].energy >= minDrop && (strat == STRAT_FEB ||
+    (allowLooting && enemies.length == 0) ||
+    !(drops2[a].pos.x > 16 && drops2[a].pos.x < 30 && drops2[a].pos.y < 9)))
   {
     addToDrops(drops2[a].pos, drops2[a].energy, false);
   }
@@ -878,6 +924,9 @@ createCrp('carry', 2, [Game.CARRY, Game.CARRY, Game.CARRY, Game.MOVE, Game.MOVE]
     }
     var localDrops = creep.pos.findInRange(Game.DROPPED_ENERGY, 1);
     for (var a = 0; a < localDrops.length; a++) {
+      // if (creep.memory.targetPos) {
+        // log(creep, creep.memory.targetPos.x + ' ' + creep.memory.targetPos.y);
+      // }
       creep.pickup(localDrops[a]);
     }
   }
@@ -967,9 +1016,6 @@ createCrp('builderCarry', 0, [Game.CARRY, Game.CARRY, Game.CARRY, Game.CARRY, Ga
 });
 
 createCrp('healer', 0, [Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.MOVE, Game.HEAL, Game.HEAL, Game.HEAL, Game.HEAL], function(creep) {
-  // if (avoidEnemies(creep)) {
-  // return;
-  // }
   var chosenIndex = -1;
   for (var a = 0; a < healTargets.length; a++) {
     if (healTargets[a] != creep) {
@@ -991,27 +1037,21 @@ createCrp('healer', 0, [Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.MOV
     // if (calculateDistance(creep.pos, healTargets[index].pos) > 2) {
       // creep.moveTo(healTargets[index].pos.x, grY + 2);
     // }
-    return;
   }
-  if (strat == STRAT_FEB && !tooHighCPU && Game.time - creep.memory.birthTime < 40) {
-    var obj = createRotObj(creep.pos, healPos, creep.memory.rot);
-    obj.dx = -obj.dx;
-    obj.dy = -obj.dy;
-    moveDirection(obj, creep);
-    creep.memory.rot = obj.rot;
+  if (strat == STRAT_FEB) {
+    delete creep.memory.path;
+    delete creep.memory.targetPos;
+    if (!tooHighCPU && !avoidEnemies(creep)) {
+      // && Game.time - creep.memory.birthTime < 40) {
+      var obj = createRotObj(creep.pos, healPos, creep.memory.rot);
+      obj.dx = -obj.dx;
+      obj.dy = -obj.dy;
+      moveDirection(obj, creep);
+      creep.memory.rot = obj.rot;
+      updateCPU();
+    }
     handleTargetPos(creep);
-    updateCPU();
   }
-  // if (strat == STRAT_FEB) {
-    // if (creep.pos.y > grY + 4 && creep.pos.x < 9) {
-      // creep.move(Game.TOP_RIGHT);
-    // } else if (creep.pos.y > grY + 2) {
-      // creep.move(Game.TOP);
-    // }
-  // }
-  // if (creep.pos.y - grY < 3 || calculateDistance(spawn.pos, creep.pos) < 3) {
-    // creep.moveTo(grX + 2, grY + 3);
-  // }
 });
 
 createCrp('guard', 100, [
@@ -1046,33 +1086,33 @@ createCrp('hunter', 0,
  [Game.RANGED_ATTACK, Game.RANGED_ATTACK, Game.MOVE, Game.MOVE],
  function(creep)
 {
+  delete creep.memory.path;
+  delete creep.memory.targetPos;
   if (!tooHighCPU) {
     var enemy = getClosest(creep, Game.HOSTILE_CREEPS, 50);
-    if ((creep.hits < creep.hitsMax && calculateDistance(healPos, creep.pos) <
-      10) || creep.hits <= (creep.hitsMax >> 1))
-    {
-      if (!avoidEnemies(creep))
-      {
-        var obj = createRotObj(creep.pos, healPos, creep.memory.isAvoidingEnemy);
+    if (creep.hits <= (creep.hitsMax >> 1)) {
+      if (!avoidEnemies(creep)) {
+        var obj = createRotObj(creep.pos, healPos, creep.memory.rot);
         obj.dx = -obj.dx;
         obj.dy = -obj.dy;
         moveDirection(obj, creep);
-        creep.memory.isAvoidingEnemy = obj.rot;
+        creep.memory.rot = obj.rot;
       }
     } else {
       var otherPos = {'x': 34, 'y': 34};
       if (enemy) {
         otherPos = prep4mem(enemy.pos);
       }
+      // log(creep, otherPos.x + ' ' + otherPos.y);
       var distance = calculateDistance(otherPos, creep.pos);
-      if ((!enemy || distance != 3 || !enemy.fatigue) && (enemy || distance)) {
+      if (distance && (!enemy || distance < 3 || distance > 3)) {
         var obj = createRotObj(creep.pos, otherPos, creep.memory.rot);
-        if (!enemy || ((creep.hitsMax >> 1) < creep.hits && distance > 3)) {
+        if (!enemy || distance > 3) {
           obj.dx = -obj.dx;
           obj.dy = -obj.dy;
           delete creep.memory.isAvoidingEnemy;
-        } else {
-          creep.memory.isAvoidingEnemy = obj.rot;
+        // } else {
+          // creep.memory.isAvoidingEnemy = obj.rot;
         }
         moveDirection(obj, creep);
         creep.memory.rot = obj.rot;
@@ -1216,7 +1256,7 @@ if (strat == STRAT_JAN) {
   crp.carry.body = [Game.CARRY, Game.CARRY, Game.MOVE, Game.MOVE];
   crp.healer.body = [Game.MOVE, Game.HEAL, Game.HEAL, Game.HEAL, Game.HEAL];
   crp.harvester.maxCount = 2;
-  crp.carry.maxCount = 6;
+  crp.carry.maxCount = 2;
   crp.guard.maxCount = 0;
   crp.healer.maxCount = 0;
   crp.hunter.maxCount = 30;
@@ -1228,7 +1268,7 @@ if (strat == STRAT_JAN) {
   if (crp.hunter.count > 6) {
     crp.healer.maxCount = 4;
   }
-  if (crp.hunter.count > 20) {
+  if (crp.hunter.count > 8) {
     crp.spawnBuilder.maxCount = 1;
   }
   var extCount = 0;
