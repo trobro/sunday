@@ -526,7 +526,7 @@ exitCount += (room.find(Game.EXIT_TOP).length ? 1 : 0);
 exitCount += (room.find(Game.EXIT_RIGHT).length ? 1 : 0);
 exitCount += (room.find(Game.EXIT_BOTTOM).length ? 1 : 0);
 exitCount += (room.find(Game.EXIT_LEFT).length ? 1 : 0);
-var strat = (exitCount > 1 ? STRAT_FEB : STRAT_JAN);
+var strat = (exitCount > 1 ? STRAT_FEB2 : STRAT_JAN);
 var grXe = -1;
 var grYe = -1;
 var roomGrid = room.lookAtArea(0, 0, 49, 49);
@@ -548,14 +548,14 @@ if (strat == STRAT_JAN) {
   var grX = 6;
   var grY = 38;
   var enemySafeDistance = 5;
-  var healPos = createPos(34, 34);
+  var healPos = createPos(26, 25);
 } else {
   var grX = 6;
   var grY = 38;
   var enemySafeDistance = 5;
   var healPos = createPos(14, 18);
 }
-var structs = room.find(Game.MY_STRUCTURES);
+var structs = room.find(Game.STRUCTURES);
 var targetStructureCount = 9;
 var sources = room.find(Game.SOURCES);
 var sourceByKey = {};
@@ -573,6 +573,11 @@ var hasLeftBuilder = false;
 var hasLeftBuilderCarry = false;
 var tmpEnemies = room.find(Game.HOSTILE_CREEPS);
 var enemies = [];
+var builders = [];
+var leftGuardCount = 0;
+var rightGuardCount = 0;
+var leftHealerCount = 0;
+var rightHealerCount = 0;
 
 if (strat == STRAT_JAN && spawn) {
   build(3, 41);
@@ -593,9 +598,12 @@ if (strat == STRAT_JAN && spawn) {
   build(spawn.pos.x - 2, spawn.pos.y - 2);
   build(spawn.pos.x - 2, spawn.pos.y - 1);
 } else if (strat == STRAT_FEB2) {
+  build(18, 33, Game.STRUCTURE_WALL);
+  build(19, 33, Game.STRUCTURE_WALL);
   build(18, 32, Game.STRUCTURE_WALL);
-  build(19, 31, Game.STRUCTURE_WALL);
-  build(31, 21, Game.STRUCTURE_WALL);
+  build(19, 32, Game.STRUCTURE_WALL);
+  build(31, 20, Game.STRUCTURE_WALL);
+  build(30, 20, Game.STRUCTURE_WALL);
 }
 var sites = room.find(Game.CONSTRUCTION_SITES);
 for (var a = 0; a < sites.length; a++) {
@@ -624,10 +632,10 @@ for (var a = 0; a < tmpEnemies.length; a++) {
   }
   var chosenIndex = 0;
   for (var b = 0; b < enemies.length; b++) {
-    if (enemy.pos.y > enemies[b].pos.y - 1) {
+    if (strat == STRAT_JAN && enemy.pos.y > enemies[b].pos.y - 1) {
       chosenIndex = b;
       break;
-    } else if (enemy.pos.y == enemies[b].pos.y - 1) {
+    } else if (strat != STRAT_JAN || enemy.pos.y == enemies[b].pos.y - 1) {
       if (enemy.attack >= enemies[b].attack) {
         if (enemy.attack > enemies[b].attack) {
           chosenIndex = b;
@@ -685,8 +693,22 @@ for (var i in Game.creeps) {
     }
     healTargets.splice(chosenIndex, 0, creep);
   }
-  if (creep.memory.role != 'carry') {
+  if (creep.memory.role != 'carry' && creep.memory.role != 'hunter') {
     addToObstacles(creep);
+  }
+  if (creep.memory.role == 'guard') {
+    if (creep.memory.isLeft) {
+      leftGuardCount++;
+    } else {
+      rightGuardCount++;
+    }
+  }
+  if (creep.memory.role == 'healer') {
+    if (creep.memory.isLeft) {
+      leftHealerCount++;
+    } else {
+      rightHealerCount++;
+    }
   }
   if (creep.memory.role == 'guard' || creep.memory.role == 'healer') {
     addToGrid(creep);
@@ -703,6 +725,15 @@ for (var i in Game.creeps) {
     } else if (creep.memory.role == 'builder') {
       if (creep.ticksToLive > lifeLongLimit && creep.memory.workCenter.x < 27) {
         hasLeftBuilder = true;
+      }
+      builders.push(creep);
+      if ('assignedCarryName' in creep.memory) {
+        if (!(creep.memory.assignedCarryName in Game.creeps) ||
+          Game.creeps[creep.memory.assignedCarryName
+          ].memory.assignedBuilderName != creep.name)
+        {
+          delete creep.memory.assignedCarryName;
+        }
       }
     } else if (creep.memory.role == 'builderCarry') {
       if (creep.ticksToLive > lifeLongLimit && creep.memory.workCenter.x < 27) {
@@ -727,9 +758,15 @@ for (var i in Game.creeps) {
   if (creep.spawning || creep.memory.role != 'carry') {
     continue;
   }
+  if (('assignedBuilderName' in creep.memory) && !creep.energy) {
+    if (creep.memory.assignedBuilderName in Game.creeps) {
+      delete Game.creeps[creep.memory.assignedBuilderName].memory.assignedCarryName;
+    }
+    delete creep.memory.assignedBuilderName;
+  }
   if (creep.memory.isAvoidingEnemy) {
     delete creep.memory.targetDrop;
-  } else {
+  } else if (!creep.memory.assignedBuilderName) {
     var spaceFree = creep.energyCapacity - creep.energy;
     if (spaceFree) {
       if ('targetDrop' in creep.memory) {
@@ -774,7 +811,7 @@ for (var a = 0; a < freeCarries.length; a++) {
       chosenKey = key;
     }
   }
-  if (minDistance > 4 && creep.energy) {
+  if (minDistance > 4 && creep.energy && spawn) {
     creep.memory.targetPos = prep4mem(spawn.pos);
   } else if (chosenKey !== '') {
     var targetPos = posFromKey(chosenKey);
@@ -851,15 +888,21 @@ createCrp('builder', 0, [Game.WORK, Game.WORK, Game.CARRY, Game.CARRY, Game.MOVE
         (creep.memory.workCenter.x > 27 &&
         sites[a].pos.x > creep.memory.targetConstruction.x) ||
         (creep.memory.workCenter.x <= 27 &&
-        sites[a].pos.x < creep.memory.targetConstruction.x))
+        sites[a].pos.x < creep.memory.targetConstruction.x) ||
+        (sites[a].pos.x == creep.memory.targetConstruction.x &&
+        sites[a].pos.y > creep.memory.targetConstruction.y))
       {
         creep.memory.targetConstruction = prep4mem(sites[a].pos);
       }
     }
   }
   if (creep.memory.targetConstruction) {
-    creep.moveTo(creep.memory.targetConstruction.x,
-      creep.memory.targetConstruction.y - 1);
+    if (calculateDistance(creep.memory.targetConstruction,
+      creep.pos) > 1)
+    {
+      creep.moveTo(creep.memory.targetConstruction.x,
+        creep.memory.targetConstruction.y - (strat == STRAT_JAN ? 1 : 0));
+    }
     var sites = room.getPositionAt(creep.memory.targetConstruction.x,
       creep.memory.targetConstruction.y).findInRange(
       Game.CONSTRUCTION_SITES, 0);
@@ -909,8 +952,26 @@ createCrp('carry', 2, [Game.CARRY, Game.CARRY, Game.CARRY, Game.MOVE, Game.MOVE]
     return;
   }
   avoidEnemies(creep);
-  if (!creep.memory.isAvoidingEnemy && creep.energy == creep.energyCapacity) {
-    creep.memory.targetPos = prep4mem(spawn.pos);
+  if (!creep.memory.isAvoidingEnemy && creep.energy == creep.energyCapacity &&
+    !('assignedBuilderName' in creep.memory))
+  {
+    if (strat == STRAT_FEB2) {
+      for (var a = 0; a < builders.length; a++) {
+        if (builders[a].energy < builders[a].energyCapacity &&
+          !('assignedCarryName' in builders[a].memory))
+        {
+          builders[a].memory.assignedCarryName = creep.name;
+          creep.memory.targetPos = prep4mem(builders[a].pos);
+          creep.memory.assignedBuilderName = builders[a].name;
+          break;
+        }
+      }
+      if (!creep.memory.assignedBuilderName) {
+        creep.memory.targetPos = prep4mem(spawn.pos);
+      }
+    } else {
+      creep.memory.targetPos = prep4mem(spawn.pos);
+    }
   }
   if ('targetPos' in creep.memory) {
     if (calculateDistance(creep.memory.targetPos, creep.pos) < 2) {
@@ -927,15 +988,34 @@ createCrp('carry', 2, [Game.CARRY, Game.CARRY, Game.CARRY, Game.MOVE, Game.MOVE]
         delete creep.memory.lastMoveTime;
       }
     }
-  } else if (calculateDistance(spawn.pos, creep.pos) < 4) {
+  } else if (!creep.memory.assignedBuilderName &&
+    calculateDistance(spawn.pos, creep.pos) < 4)
+  {
     if (strat == STRAT_JAN) {
       creep.memory.targetPos = createPos(spawn.pos.x, spawn.pos.y + 8);
     } else {
       creep.memory.targetPos = createPos(spawn.pos.x - 8, spawn.pos.y - 8);
     }
   }
+  if (creep.memory.assignedBuilderName && !('targetPos' in creep.memory)) {
+    if (!(creep.memory.assignedBuilderName in Game.creeps)) {
+      delete creep.memory.assignedBuilderName;
+    } else {
+      var builder = Game.creeps[creep.memory.assignedBuilderName];
+      if (calculateDistance(creep.pos, builder.pos) > 1) {
+        creep.memory.targetPos = prep4mem(builder.pos);
+      } else if (builder.energy < builder.energyCapacity) {
+        creep.transferEnergy(builder);
+      } else {
+        delete creep.memory.assignedBuilderName;
+        delete builder.memory.assignedCarryName;
+      }
+    }
+  }
   handleTargetPos(creep);
-  if (creep.energy < creep.energyCapacity) {
+  if (!('assignedBuilderName' in creep.memory) &&
+    creep.energy < creep.energyCapacity)
+  {
     if (!('targetPos' in creep.memory)) {
       var maxEnergy = 0;
       var pos = {};
@@ -1070,7 +1150,21 @@ createCrp('healer', 0, [Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.MOV
       // creep.moveTo(healTargets[index].pos.x, grY + 2);
     // }
   }
-  if (strat == STRAT_FEB) {
+  if (strat == STRAT_FEB2) {
+    if (creep.memory.isLeft) {
+      if (creep.pos.y < 28) {
+        creep.memory.targetPos = createPos(17, 28);
+        handleTargetPos(creep);
+      } else if (creep.pos.x < 22) {
+        creep.move(Game.RIGHT);
+      }
+    } else if (creep.pos.x < 26) {
+      creep.memory.targetPos = createPos(27, 18);
+      handleTargetPos(creep);
+    } else if (creep.pos.y < 23) {
+      creep.move(Game.BOTTOM);
+    }
+  } else if (strat != STRAT_JAN) {
     delete creep.memory.path;
     delete creep.memory.targetPos;
     if (!tooHighCPU && !avoidEnemies(creep)) {
@@ -1106,10 +1200,27 @@ createCrp('guard', 100, [
       }
     }
   }
-  if (strat == STRAT_FEB && creep.pos.y > grY + 2) {
+  if (strat == STRAT_FEB2) {
+    if (creep.memory.isLeft) {
+      if (creep.pos.y < 29) {
+        creep.memory.targetPos = createPos(17, 29);
+        handleTargetPos(creep);
+      } else if (creep.pos.y == 29 && !getObstacle(creep.pos.x, 30)) {
+        creep.move(Game.BOTTOM);
+      } else if (creep.pos.x < 22) {
+        creep.move(Game.RIGHT);
+      }
+    } else if (creep.pos.x < 27) {
+      creep.memory.targetPos = createPos(27, 18);
+      handleTargetPos(creep);
+    } else if (creep.pos.x == 27 && !getObstacle(28, creep.pos.y)) {
+      creep.move(Game.RIGHT);
+    } else if (creep.pos.y < 23) {
+      creep.move(Game.BOTTOM);
+    }
+  } else if (strat == STRAT_FEB && creep.pos.y > grY + 2) {
     creep.move(Game.TOP_RIGHT);
-  }
-  if (strat == STRAT_JAN && spawn && spawn.pos.y > 27) {
+  } else if (strat == STRAT_JAN && spawn && spawn.pos.y > 27) {
     creep.moveTo(11, 42);
   }
 });
@@ -1315,22 +1426,26 @@ if (strat == STRAT_JAN) {
   }
 } else {
   crp.carry.body = [Game.CARRY, Game.CARRY, Game.MOVE, Game.MOVE];
-  crp.healer.body = [Game.MOVE, Game.HEAL, Game.HEAL, Game.HEAL, Game.HEAL];
+  // crp.healer.body = [Game.MOVE, Game.HEAL, Game.HEAL, Game.HEAL, Game.HEAL];
   crp.harvester.maxCount = 2;
   crp.carry.maxCount = 2;
   crp.guard.maxCount = 0;
-  crp.healer.maxCount = 0;
-  crp.hunter.maxCount = 6;
-  if (crp.hunter.count > 0) {
+  crp.healer.maxCount = crp.guard.count / 2;
+  if (crp.guard.count < 4) {
+    crp.hunter.maxCount = 6;
+  }
+  if (crp.hunter.count > 0 || crp.guard.count > 0) {
     crp.heavyHarvester.maxCount = 1;
     crp.harvester.maxCount = 4;
     crp.carry.maxCount = 12;
   }
-  if (crp.hunter.count >= 6) {
-    crp.healer.maxCount = 4;
+  if (crp.hunter.count >= 6 || crp.guard.count > 1) {
     // crp.spawnBuilder.maxCount = 1;
-    crp.builder.maxCount = Math.max(0, Math.min(2, targetStructureCount -
-      structs.length - 8));
+    if (enemies.length == 0) {
+      crp.builder.maxCount = Math.max(0, Math.min(2, targetStructureCount -
+        structs.length));
+    }
+    crp.guard.maxCount = 100;
   }
   var extCount = 0;
   for (var a = 0; a < structs.length; a++) {
@@ -1376,12 +1491,25 @@ for (var typeName in crp) {
           }
           mem.sourceKey = sources[chosenIndex >= 0 ? chosenIndex : chosenBottom].id;
         } else if (myCrp.typeName == 'builder') {
-          mem.workCenter = createPos((hasLeftBuilder ? 46 : 3), 37);
+          if (strat == STRAT_JAN) {
+            mem.workCenter = createPos((hasLeftBuilder ? 46 : 3), 37);
+          } else {
+            mem.workCenter = (hasLeftBuilder ? createPos(36, 17) :
+              createPos(16, 37));
+          }
           mem.targetConstruction = null;
         } else if (myCrp.typeName == 'builderCarry') {
-          mem.workCenter = createPos((hasLeftBuilderCarry ? 46 : 3), 37);
+          if (strat == STRAT_JAN) {
+            mem.workCenter = createPos((hasLeftBuilderCarry ? 46 : 3), 37);
+          } else {
+            mem.workCenter = (hasLeftBuilderCarry ? createPos(36, 17) :
+              createPos(16, 37));
+          }
         } else if (myCrp.typeName == 'healer') {
           mem.birthTime = Game.time;
+          mem.isLeft = (leftHealerCount < rightHealerCount);
+        } else if (myCrp.typeName == 'guard') {
+          mem.isLeft = (leftGuardCount < rightGuardCount);
         }
         mySpawn.createCreep(myCrp.body, null, mem);
       }
