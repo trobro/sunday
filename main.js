@@ -556,7 +556,7 @@ if (strat == STRAT_JAN) {
   var grX = 6;
   var grY = 38;
   var enemySafeDistance = 4;
-  var healPos = createPos(16, 19);
+  var healPos = createPos(19, 22);
   var allowLooting = false;
 }
 var structs = room.find(Game.STRUCTURES);
@@ -602,10 +602,11 @@ if (strat == STRAT_JAN && spawn) {
   build(spawn.pos.x - 2, spawn.pos.y - 2);
   build(spawn.pos.x - 2, spawn.pos.y - 1);
 } else if (strat == STRAT_FEB2 && spawn) {
-  // build(spawn.pos.x - 1, spawn.pos.y - 2);
-  // build(spawn.pos.x - 2, spawn.pos.y - 2);
-  // build(spawn.pos.x - 2, spawn.pos.y - 1);
-  // build(spawn.pos.x - 2, spawn.pos.y);
+  build(spawn.pos.x, spawn.pos.y - 2);
+  build(spawn.pos.x - 1, spawn.pos.y - 2);
+  build(spawn.pos.x - 2, spawn.pos.y - 2);
+  build(spawn.pos.x - 2, spawn.pos.y - 1);
+  build(spawn.pos.x - 2, spawn.pos.y);
   // build(18, 33, Game.STRUCTURE_WALL);
   // build(19, 33, Game.STRUCTURE_WALL);
   // build(18, 32, Game.STRUCTURE_WALL);
@@ -616,12 +617,12 @@ if (strat == STRAT_JAN && spawn) {
   // build(30, 20, Game.STRUCTURE_WALL);
   // build(30, 22, Game.STRUCTURE_WALL);
   // build(31, 22, Game.STRUCTURE_WALL);
-  addToObstacles({'pos': room.getPositionAt(9, 25)});
-  addToObstacles({'pos': room.getPositionAt(8, 24)});
-  addToObstacles({'pos': room.getPositionAt(7, 23)});
-  addToObstacles({'pos': room.getPositionAt(19, 12)});
-  addToObstacles({'pos': room.getPositionAt(20, 12)});
-  addToObstacles({'pos': room.getPositionAt(21, 12)});
+  // addToObstacles({'pos': room.getPositionAt(9, 25)});
+  // addToObstacles({'pos': room.getPositionAt(8, 24)});
+  // addToObstacles({'pos': room.getPositionAt(7, 23)});
+  // addToObstacles({'pos': room.getPositionAt(19, 12)});
+  // addToObstacles({'pos': room.getPositionAt(20, 12)});
+  // addToObstacles({'pos': room.getPositionAt(21, 12)});
 }
 var sites = room.find(Game.CONSTRUCTION_SITES);
 for (var a = 0; a < sites.length; a++) {
@@ -652,7 +653,10 @@ for (var a = 0; a < tmpEnemies.length; a++) {
   var myDamage = enemy.hitsMax - enemy.hits;;
   while (b < enemies.length) {
     if (strat == STRAT_FEB2) {
-      if (myDamage > enemies[b].hitsMax - enemies[b].hits) {
+      if (enemy.attack > enemies[b].attack ||
+        (enemy.attack == enemies[b].attack &&
+        myDamage > enemies[b].hitsMax - enemies[b].hits))
+      {
         break;
       }
     } else if (strat == STRAT_JAN && enemy.pos.y > enemies[b].pos.y - 1) {
@@ -701,7 +705,7 @@ for (var i in Game.creeps) {
     var damage = creep.hitsMax - creep.hits;
     if (damage < 200) {
       damage -= 4000;
-    } else if (creep.memory.role == 'healer') {
+    } else if (creep.memory.role == 'healer' && creep.hits < 500) {
       damage += 4000;
     }
     creep.damage = damage;
@@ -894,6 +898,35 @@ createCrp('heavyHarvester', 0, [Game.WORK, Game.WORK, Game.WORK, Game.WORK, Game
   }
 });
 
+createCrp('spawnBuilder', 0, [Game.WORK, Game.WORK, Game.CARRY, Game.CARRY, Game.MOVE], function(creep) {
+  if (!spawn) {
+    return;
+  }
+  spawn.transferEnergy(creep);
+  var sites = spawn.pos.findInRange(Game.CONSTRUCTION_SITES, 5);
+  if (sites.length) {
+    creep.build(sites[0]);
+  }
+  var exts = spawn.pos.findInRange(Game.MY_STRUCTURES, 5);
+  for (var a = 0; a < exts.length; a++) {
+    if (exts[a].structureType == Game.STRUCTURE_EXTENSION &&
+      exts[a].energy < exts[a].energyCapacity && spawn.energy > 4000)
+    {
+      creep.transferEnergy(exts[a]);
+      break;
+    }
+  }
+  if (strat == STRAT_JAN) {
+    if (creep.pos.x != spawn.pos.x + 1 || creep.pos.y != spawn.pos.y + 1) {
+      creep.moveTo(spawn.pos.x + 1, spawn.pos.y + 1);
+    }
+  } else {
+    if (creep.pos.x != spawn.pos.x - 1 || creep.pos.y != spawn.pos.y - 1) {
+      creep.moveTo(spawn.pos.x - 1, spawn.pos.y - 1);
+    }
+  }
+});
+
 createCrp('builder', 0, [Game.WORK, Game.WORK, Game.CARRY, Game.CARRY, Game.MOVE], function(creep) {
   if (structs.length == targetStructureCount) {
     creep.suicide();
@@ -939,35 +972,6 @@ createCrp('builder', 0, [Game.WORK, Game.WORK, Game.CARRY, Game.CARRY, Game.MOVE
   }
 });
 
-createCrp('spawnBuilder', 0, [Game.WORK, Game.WORK, Game.CARRY, Game.CARRY, Game.MOVE], function(creep) {
-  if (!spawn) {
-    return;
-  }
-  spawn.transferEnergy(creep);
-  var sites = spawn.pos.findInRange(Game.CONSTRUCTION_SITES, 5);
-  if (sites.length) {
-    creep.build(sites[0]);
-  }
-  var exts = spawn.pos.findInRange(Game.MY_STRUCTURES, 5);
-  for (var a = 0; a < exts.length; a++) {
-    if (exts[a].structureType == Game.STRUCTURE_EXTENSION &&
-      exts[a].energy < exts[a].energyCapacity && spawn.energy > 4000)
-    {
-      creep.transferEnergy(exts[a]);
-      break;
-    }
-  }
-  if (strat == STRAT_JAN) {
-    if (creep.pos.x != spawn.pos.x + 1 || creep.pos.y != spawn.pos.y + 1) {
-      creep.moveTo(spawn.pos.x + 1, spawn.pos.y + 1);
-    }
-  } else {
-    if (creep.pos.x != spawn.pos.x - 1 || creep.pos.y != spawn.pos.y - 1) {
-      creep.moveTo(spawn.pos.x - 1, spawn.pos.y - 1);
-    }
-  }
-});
-
 createCrp('carry', 2, [Game.CARRY, Game.CARRY, Game.CARRY, Game.MOVE, Game.MOVE], function(creep) {
   if (!spawn) {
     return;
@@ -976,7 +980,7 @@ createCrp('carry', 2, [Game.CARRY, Game.CARRY, Game.CARRY, Game.MOVE, Game.MOVE]
     creep.suicide();
     return;
   }
-  avoidEnemies(creep);
+  // avoidEnemies(creep);
   if (!creep.memory.isAvoidingEnemy && creep.energy == creep.energyCapacity &&
     !('assignedBuilderName' in creep.memory))
   {
@@ -1153,7 +1157,11 @@ createCrp('builderCarry', 0, [Game.CARRY, Game.CARRY, Game.CARRY, Game.CARRY, Ga
   }
 });
 
-createCrp('healer', 0, [Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.MOVE, Game.HEAL, Game.HEAL, Game.HEAL, Game.HEAL], function(creep) {
+createCrp('healer', 0, [Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.TOUGH,
+  Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.TOUGH,
+  Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.TOUGH,
+  Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.TOUGH,
+  Game.MOVE, Game.HEAL, Game.HEAL, Game.HEAL, Game.HEAL], function(creep) {
   var chosenIndex = -1;
   for (var a = 0; a < healTargets.length; a++) {
     if (healTargets[a] != creep) {
@@ -1178,8 +1186,8 @@ createCrp('healer', 0, [Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.MOV
   }
   if (strat == STRAT_FEB2) {
     if (creep.memory.isLeft) {
-      var endX = spawn.pos.x + 2;
-      var endY = spawn.pos.y + 2;
+      var endX = 20;
+      var endY = 27;
       if (creep.pos.y < endY - 1) {
         creep.memory.targetPos = createPos(endX - 4, endY - 1);
         handleTargetPos(creep);
@@ -1193,8 +1201,8 @@ createCrp('healer', 0, [Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.TOUGH, Game.MOV
         }
       }
     } else {
-      var endX = spawn.pos.x + 2;
-      var endY = spawn.pos.y + 2;
+      var endX = 25;
+      var endY = 21;
       if (creep.pos.x < endX - 1) {
         creep.memory.targetPos = createPos(endX - 1, endY - 4);
         handleTargetPos(creep);
@@ -1248,10 +1256,10 @@ createCrp('guard', 100, [
   }
   if (strat == STRAT_FEB2) {
     if (creep.memory.isLeft) {
-      var endX = spawn.pos.x + 3;
-      var endY = spawn.pos.y + 3;
+      var endX = 20;
+      var endY = 28;
       if (creep.pos.y < endY - 1) {
-        creep.memory.targetPos = createPos(endX - 6, endY - 1);
+        creep.memory.targetPos = createPos(endX - 5, endY - 1);
         handleTargetPos(creep);
       } else {
         delete creep.memory.targetPos;
@@ -1263,10 +1271,10 @@ createCrp('guard', 100, [
         }
       }
     } else {
-      var endX = spawn.pos.x + 3;
-      var endY = spawn.pos.y + 3;
+      var endX = 26;
+      var endY = 21;
       if (creep.pos.x < endX - 1) {
-        creep.memory.targetPos = createPos(endX - 1, endY - 6);
+        creep.memory.targetPos = createPos(endX - 1, endY - 5);
         handleTargetPos(creep);
       } else {
         delete creep.memory.targetPos;
@@ -1495,20 +1503,20 @@ if (strat == STRAT_JAN) {
   crp.harvester.maxCount = 2;
   crp.carry.maxCount = 2;
   crp.guard.maxCount = 0;
-  crp.healer.maxCount = crp.guard.count * 2 / 3;
+  crp.healer.maxCount = crp.guard.count;
   if (crp.guard.count < 4) {
     crp.hunter.maxCount = 10;
   }
   if (crp.hunter.count > 0 || crp.guard.count > 0) {
-    // crp.heavyHarvester.maxCount = 1;
+    crp.heavyHarvester.maxCount = 1;
     crp.harvester.maxCount = 4;
     crp.carry.maxCount = 12;
   }
   if (crp.hunter.count >= 10 || crp.guard.count > 1) {
-    // crp.spawnBuilder.maxCount = 1;
-    // if (structs.length == 9) {
-      // crp.builder.maxCount = 2;
-    // }
+    crp.spawnBuilder.maxCount = 1;
+    if (structs.length == 9) {
+      crp.builder.maxCount = 1;
+    }
     crp.guard.maxCount = 100;
   }
   if (crp.heavyHarvester.count > 0) {
