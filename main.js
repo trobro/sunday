@@ -630,29 +630,31 @@ for (var a = 0; a < tmpEnemies.length; a++) {
       enemy.tough += body.hits;
     }
   }
-  var chosenIndex = 0;
-  for (var b = 0; b < enemies.length; b++) {
-    if (strat == STRAT_JAN && enemy.pos.y > enemies[b].pos.y - 1) {
-      chosenIndex = b;
+  var b = 0;
+  var myDamage = enemy.hitsMax - enemy.hits;;
+  while (b < enemies.length) {
+    if (strat == STRAT_FEB2) {
+      if (myDamage > enemies[b].hitsMax - enemies[b].hits) {
+        break;
+      }
+    } else if (strat == STRAT_JAN && enemy.pos.y > enemies[b].pos.y - 1) {
       break;
     } else if (strat != STRAT_JAN || enemy.pos.y == enemies[b].pos.y - 1) {
       if (enemy.attack >= enemies[b].attack) {
         if (enemy.attack > enemies[b].attack) {
-          chosenIndex = b;
           break;
         } else if (enemy.tough <= enemies[b].tough) {
           if (enemy.tough < enemies[b].tough) {
-            chosenIndex = b;
             break;
           } else if (enemy.ranged > enemies[b].ranged) {
-            chosenIndex = b;
             break;
           }
         }
       }
     }
+    b++;
   }
-  enemies.splice(chosenIndex, 0, enemy);
+  enemies.splice(b, 0, enemy);
 }
 
 if (enemies.length) {
@@ -1190,13 +1192,15 @@ createCrp('guard', 100, [
   Game.RANGED_ATTACK],
   function(creep)
 {
-  if (creep.pos.findInRange(Game.HOSTILE_CREEPS, 1).length > 0) {
-    creep.rangedMassAttack();
-  } else {
-    for (var a = 0; a < enemies.length; a++) {
-      if (calculateDistance(creep.pos, enemies[a].pos) < 4) {
-        creep.rangedAttack(enemies[a]);
-        break;
+  if (enemies.length) {
+    if (creep.pos.findInRange(Game.HOSTILE_CREEPS, 1).length > 0) {
+      creep.rangedMassAttack();
+    } else {
+      for (var a = 0; a < enemies.length; a++) {
+        if (calculateDistance(creep.pos, enemies[a].pos) < 4) {
+          creep.rangedAttack(enemies[a]);
+          break;
+        }
       }
     }
   }
